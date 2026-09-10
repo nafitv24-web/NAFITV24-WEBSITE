@@ -1,0 +1,16 @@
+{
+  "name": "NAFI TV 24 - Live Sports & TV",
+  "short_name": "NAFI TV 24",
+  "description": "লাইভ টিভি, মুভি, ওয়েব সিরিজ এবং স্পোর্টস স্ট্রিমিং",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#00e5ff",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

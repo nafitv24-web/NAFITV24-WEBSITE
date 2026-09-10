@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NAFI TV 24 - লাইভ টিভি, স্পোর্টস ও মুভি স্ট্রিমিং</title>
+  
+  <!-- Meta tags for SEO & Social Sharing -->
+  <meta name="description" content="NAFI TV 24 - লাইভ ক্রিকেট, ফুটবল, সকল টিভি চ্যানেল, মুভি এবং ওয়েব সিরিজ ফ্রিতে উপভোগ করুন।" />
+  <meta name="theme-color" content="#020617" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Google Fonts: Hind Siliguri (Bengali) & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- Hls.js for m3u8 live streaming on all modern web browsers -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="dark-theme">
+  <!-- Top Status & Announcement Bar -->
+  <aside class="top-announcement" aria-label="Announcement">
+    <div class="announcement-badge"><i class="fa-solid fa-bolt"></i> লাইভ আপডেট</div>
+    <div class="announcement-content">
+      <span>ফায়ারবেস ক্লাউড কানেক্টেড • কোনো সাবস্ক্রিপশন ছাড়াই সকল ম্যাচ ও চ্যানেল ফ্রি!</span>
+    </div>
+    <div class="announcement-actions">
+      <button id="btn-open-admin" title="এডমিন ও ফায়ারবেস সেটিংস"><i class="fa-solid fa-gear"></i> সেটিংস</button>
+    </div>
+  </aside>
+
+  <!-- Main Header -->
+  <header class="main-header">
+    <div class="header-container">
+      <div class="brand-logo" id="brand-logo-btn">
+        <div class="logo-icon-wrap">
+          <i class="fa-solid fa-play logo-play"></i>
+        </div>
+        <div class="logo-text">
+          <div class="brand-title">NAFI <span>TV 24</span></div>
+          <div class="brand-sub">SPORTS & ENTERTAINMENT</div>
+        </div>
+        <span class="live-pill"><span class="pulse-dot"></span> LIVE</span>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs" id="nav-tabs">
+        <button class="nav-tab active" data-tab="sports">
+          <i class="fa-solid fa-trophy"></i>
+          <span>লাইভ স্পোর্টস</span>
+          <span class="tab-badge" id="badge-sports">0</span>
+        </button>
+        <button class="nav-tab" data-tab="livetv">
+          <i class="fa-solid fa-tv"></i>
+          <span>লাইভ টিভি</span>
+          <span class="tab-badge" id="badge-livetv">0</span>
+        </button>
+        <button class="nav-tab" data-tab="movies">
+          <i class="fa-solid fa-film"></i>
+          <span>মুভি ও সিরিজ</span>
+          <span class="tab-badge" id="badge-movies">0</span>
+        </button>
+        <button class="nav-tab" data-tab="playlist">
+          <i class="fa-solid fa-list-ul"></i>
+          <span>প্লেলিস্ট</span>
+        </button>
+      </nav>
+
+      <!-- Search & Quick Action Controls -->
+      <div class="header-actions">
+        <div class="search-input-wrap">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input type="text" id="search-input" placeholder="চ্যানেল, ম্যাচ বা মুভি খুঁজুন..." autocomplete="off" />
+          <button id="search-clear" class="search-clear-btn" style="display: none;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <button id="btn-refresh-data" class="icon-btn" title="ফায়ারবেস রিফ্রেশ">
+          <i class="fa-solid fa-arrows-rotate"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Marquee Breaking News Ticker Bar -->
+  <section class="ticker-section">
+    <div class="ticker-badge">
+      <span class="pulse-dot red"></span> ব্রেকিং নিউজ
+    </div>
+    <div class="ticker-scroll-container">
+      <div class="ticker-text" id="marquee-ticker-content">
+        বাংলাদেশ ব্যাংকের নতুন মুদ্রানীতি ঘোষণা। পুঁজিবাজারে ঊর্ধ্বগতি। NAFI TV24 এ ক্রিকেট, ফুটবল ও লাইভ টিভি চ্যানেল সম্পূর্ণ বিনামূল্যে উপভোগ করুন।
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Container -->
+  <main class="content-wrapper">
+    
+    <!-- Hero Video Player Section (Dockable & Responsive) -->
+    <section class="player-section" id="player-container">
+      <div class="player-wrapper">
+        <div class="video-frame-container">
+          <video id="main-video-player" playsinline preload="auto" poster="https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1200&fit=crop"></video>
+          
+          <!-- Video Loading Overlay -->
+          <div class="video-overlay-loader" id="video-loader">
+            <div class="spinner"></div>
+            <p id="loader-status-text">স্ট্রীম লোড হচ্ছে...</p>
+          </div>
+
+          <!-- Video Error Overlay -->
+          <div class="video-overlay-error" id="video-error" style="display: none;">
+            <i class="fa-solid fa-triangle-exclamation error-icon"></i>
+            <h3>স্ট্রীম প্লে করা সম্ভব হয়নি</h3>
+            <p id="error-message-text">বর্তমান সার্ভার ব্যস্ত বা অফলাইন। অনুগ্রহ করে বিকল্প সার্ভার নির্বাচন করুন।</p>
+            <div class="error-actions">
+              <button id="btn-retry-player" class="btn-primary"><i class="fa-solid fa-rotate-right"></i> পুনরায় চেষ্টা করুন</button>
+              <button id="btn-next-server" class="btn-secondary"><i class="fa-solid fa-server"></i> পরবর্তী সার্ভার</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Video Details & Server Switcher Bar -->
+        <div class="player-info-bar">
+          <div class="info-left">
+            <div class="playing-badge">
+              <span class="pulse-dot"></span> <span id="player-type-label">LIVE STREAM</span>
+            </div>
+            <h2 id="now-playing-title">T Sports HD</h2>
+            <div class="info-meta">
+              <span class="meta-tag" id="now-playing-category"><i class="fa-solid fa-tag"></i> Sports</span>
+              <span class="meta-tag quality" id="now-playing-quality">1080p FHD</span>
+              <span class="meta-tag status-live" id="now-playing-status">ONLINE</span>
+            </div>
+          </div>
+
+          <div class="info-right">
+            <!-- Server Selector Dropdown -->
+            <div class="server-selector-container">
+              <label for="server-select"><i class="fa-solid fa-server"></i> সার্ভার:</label>
+              <select id="server-select" class="custom-select">
+                <option value="0">সার্ভার ১ (Main HD)</option>
+              </select>
+            </div>
+
+            <!-- Player Controls (PiP, Fullscreen, External Player, Share) -->
+            <div class="player-extra-controls">
+              <button id="btn-pip" class="control-btn" title="পিকচার ইন পিকচার (PiP)"><i class="fa-solid fa-clone"></i></button>
+              <button id="btn-fullscreen" class="control-btn" title="ফুলস্ক্রিন"><i class="fa-solid fa-expand"></i></button>
+              <button id="btn-open-external" class="control-btn" title="ভিডিও লিংক কপি করুন"><i class="fa-solid fa-link"></i></button>
+              <button id="btn-share-stream" class="control-btn" title="শেয়ার করুন"><i class="fa-solid fa-share-nodes"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Category Filter Bar -->
+    <section class="category-filters-container">
+      <div class="category-filters" id="category-chips">
+        <button class="chip active" data-category="ALL">সকল কনটেন্ট</button>
+        <button class="chip" data-category="Sports">🏆 স্পোর্টস</button>
+        <button class="chip" data-category="Cricket">🏏 ক্রিকেট</button>
+        <button class="chip" data-category="Football">⚽ ফুটবল</button>
+        <button class="chip" data-category="News">📰 খবর</button>
+        <button class="chip" data-category="Bangla">🇧🇩 বাংলা টিভি</button>
+        <button class="chip" data-category="Entertainment">🎭 নাটক ও সিনেমা</button>
+        <button class="chip" data-category="Web Series">🎞️ ওয়েব সিরিজ</button>
+      </div>
+    </section>
+
+    <!-- TAB 1: Live Sports Screen -->
+    <section class="tab-pane active" id="pane-sports">
+      <div class="section-title-wrap">
+        <div class="title-with-icon">
+          <i class="fa-solid fa-trophy title-icon"></i>
+          <div>
+            <h3>আজকের লাইভ ম্যাচ ও স্পোর্টস ইভেন্ট</h3>
+            <p>ক্রিকেট, ফুটবল, আইপিএল, বিপিএল ও সকল টুর্নামেন্টের লাইভ স্ট্রিমিং</p>
+          </div>
+        </div>
+        <div class="filter-count" id="sports-count-label">লোড হচ্ছে...</div>
+      </div>
+
+      <!-- Live Sports Grid -->
+      <div class="media-grid sports-grid" id="sports-grid">
+        <!-- Rendered via JavaScript from Firebase -->
+      </div>
+    </section>
+
+    <!-- TAB 2: Live TV Channels Screen -->
+    <section class="tab-pane" id="pane-livetv">
+      <div class="section-title-wrap">
+        <div class="title-with-icon">
+          <i class="fa-solid fa-tv title-icon"></i>
+          <div>
+            <h3>সকল লাইভ টিভি চ্যানেল</h3>
+            <p>দেশি ও বিদেশি জনপ্রিয় স্পোর্টস, নিউজ ও এন্টারটেইনমেন্ট চ্যানেলসমূহ</p>
+          </div>
+        </div>
+        <div class="filter-count" id="livetv-count-label">লোড হচ্ছে...</div>
+      </div>
+
+      <!-- Live TV Grid -->
+      <div class="media-grid channels-grid" id="livetv-grid">
+        <!-- Rendered via JavaScript from Firebase -->
+      </div>
+    </section>
+
+    <!-- TAB 3: Movies & Web Series Screen -->
+    <section class="tab-pane" id="pane-movies">
+      <div class="section-title-wrap">
+        <div class="title-with-icon">
+          <i class="fa-solid fa-film title-icon"></i>
+          <div>
+            <h3>মুভি, ব্লকবাস্টার ও ওয়েব সিরিজ</h3>
+            <p>বাংলা, হিন্দি ও হলিউডের জনপ্রিয় সিনেমা এবং সিরিজ ফুল এইচডিতে</p>
+          </div>
+        </div>
+        <div class="filter-count" id="movies-count-label">লোড হচ্ছে...</div>
+      </div>
+
+      <!-- Movies Grid -->
+      <div class="media-grid movies-grid" id="movies-grid">
+        <!-- Rendered via JavaScript from Firebase -->
+      </div>
+    </section>
+
+    <!-- TAB 4: M3U Playlists Screen -->
+    <section class="tab-pane" id="pane-playlist">
+      <div class="section-title-wrap">
+        <div class="title-with-icon">
+          <i class="fa-solid fa-list-check title-icon"></i>
+          <div>
+            <h3>কাস্টম M3U প্লেলিস্ট ও ক্লাউড স্ট্রিম</h3>
+            <p>সরাসরি M3U বা JSON প্লেলিস্ট যোগ করে আরও শত শত চ্যানেল উপভোগ করুন</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="playlist-custom-box">
+        <div class="input-row">
+          <input type="text" id="custom-m3u-input" placeholder="M3U প্লেলিস্টের URL লিখুন (https://...m3u)" />
+          <button id="btn-load-custom-m3u" class="btn-primary"><i class="fa-solid fa-cloud-arrow-down"></i> প্লেলিস্ট লোড করুন</button>
+        </div>
+        <div class="preset-playlists">
+          <span class="preset-label">ডিফল্ট প্লেলিস্টসমূহ:</span>
+          <button class="preset-btn" data-url="https://raw.githubusercontent.com/nfiptv24-max/NAFITV/refs/heads/main/Nafitv24.m3u">NAFI TV M3U</button>
+          <button class="preset-btn" data-url="https://raw.githubusercontent.com/nfiptv24-max/NAFITV/refs/heads/main/NAFI%20Sports.m3u">NAFI Sports M3U</button>
+          <button class="preset-btn" data-url="https://raw.githubusercontent.com/srhady/tapmad-bd/refs/heads/main/tapmad_bd.json">Tapmad BD</button>
+        </div>
+      </div>
+
+      <div class="media-grid channels-grid" id="playlist-grid">
+        <!-- Rendered via JavaScript -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Admin & Firebase Settings Modal -->
+  <div class="modal-overlay" id="admin-modal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title"><i class="fa-solid fa-sliders"></i> সেটিংস ও ফায়ারবেস ম্যানেজমেন্ট</div>
+        <button class="modal-close" id="btn-close-admin">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="admin-rtdb-url">Firebase Realtime Database URL</label>
+          <input type="text" id="admin-rtdb-url" value="https://nafitv24-live-default-rtdb.firebaseio.com/" placeholder="https://your-project.firebaseio.com/" />
+          <small class="field-hint">আপনার ফায়ারবেস ডাটাবেসের মূল লিংক। এটি সরাসরি লাইভ আপডেট করবে।</small>
+        </div>
+
+        <div class="form-group">
+          <label for="admin-pin-input">এডমিন পিন (Default: 40541273)</label>
+          <input type="password" id="admin-pin-input" placeholder="এডমিন পিন দিন" />
+        </div>
+
+        <div class="modal-actions-row">
+          <button id="btn-test-firebase" class="btn-secondary"><i class="fa-solid fa-wifi"></i> কানেকশন টেস্ট</button>
+          <button id="btn-save-settings" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> সংরক্ষণ করুন</button>
+        </div>
+
+        <div id="admin-status-message" class="admin-status-box" style="display: none;"></div>
+
+        <hr class="modal-divider" />
+
+        <!-- Add New Stream Fast Form -->
+        <div class="quick-add-form">
+          <h4><i class="fa-solid fa-plus-circle"></i> সরাসরি নতুন চ্যানেল / ম্যাচ যোগ করুন</h4>
+          <div class="form-grid">
+            <input type="text" id="new-item-title" placeholder="নাম / শিরোনাম (যেমন: T Sports HD)" />
+            <input type="text" id="new-item-url" placeholder="স্ট্রীম URL (.m3u8 বা .mp4)" />
+            <select id="new-item-type">
+              <option value="LIVE_TV">লাইভ টিভি (Live TV)</option>
+              <option value="LIVE_EVENT">লাইভ স্পোর্টস (Live Event)</option>
+              <option value="MOVIE">মুভি / সিরিজ (Movie)</option>
+            </select>
+            <input type="text" id="new-item-category" placeholder="ক্যাটাগরি (Sports, News, Bangla)" />
+            <input type="text" id="new-item-logo" placeholder="লোগো / পোস্টার ইমেজ URL" />
+            <button id="btn-add-stream" class="btn-primary full-width"><i class="fa-solid fa-cloud-arrow-up"></i> ফায়ারবেস ও লোকাল স্টোরেজে সেভ করুন</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="main-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <div class="footer-logo">NAFI <span>TV 24</span></div>
+        <p>ওয়েবসাইট ও অ্যাপের মাধ্যমে নিরবচ্ছিন্ন লাইভ স্পোর্টস ও বিনোদন স্ট্রিমিং।</p>
+      </div>
+      <div class="footer-links">
+        <a href="#pane-sports" onclick="window.switchTab('sports'); return false;">স্পোর্টস</a>
+        <a href="#pane-livetv" onclick="window.switchTab('livetv'); return false;">লাইভ টিভি</a>
+        <a href="#pane-movies" onclick="window.switchTab('movies'); return false;">মুভিজ</a>
+        <a href="https://github.com/nfiptv24-max/NAFITV" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <div class="footer-copy">
+        &copy; 2026 NAFI TV 24 • Powered by Google AI Studio Cloud & Firebase
+      </div>
+    </div>
+  </footer>
+
+  <!-- App Script -->
+  <script src="app.js"></script>
+</body>
+</html>
