@@ -176,6 +176,43 @@
     </div>
   </div>
 
+  <!-- ═══════ 7. PLAYLIST CHANNELS VIEWER MODAL / SHEET ═══════ -->
+  <div id="pl-viewer-ov" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-label="Playlist Channels">
+    <div class="pl-viewer-box">
+      <div class="pl-viewer-header">
+        <div class="pl-viewer-info">
+          <img id="pl-viewer-logo" src="favicon.svg" alt="Playlist" class="pl-viewer-logo" onerror="this.src='favicon.svg'" />
+          <div class="pl-viewer-text">
+            <div id="pl-viewer-title" class="pl-viewer-title">প্লেলিস্ট নাম</div>
+            <div id="pl-viewer-count" class="pl-viewer-count">০ টি চ্যানেল</div>
+          </div>
+        </div>
+        <button id="btn-close-pl-viewer" class="btn-close-modal" aria-label="Close viewer"><i class="fas fa-times"></i></button>
+      </div>
+
+      <div class="pl-viewer-search-wrap">
+        <i class="fas fa-search"></i>
+        <input type="text" id="pl-viewer-search" placeholder="এই প্লেলিস্টের চ্যানেল সার্চ করুন..." autocomplete="off" />
+      </div>
+
+      <div id="pl-viewer-body" class="pl-viewer-body">
+        <div class="pl-viewer-loader" id="pl-viewer-loader" style="display: none;">
+          <div class="spin-ring"></div>
+          <p>প্লেলিস্টের চ্যানেল লোড হচ্ছে...</p>
+        </div>
+        <div id="pl-viewer-empty" class="pl-viewer-empty" style="display: none;">
+          <i class="fas fa-satellite-dish"></i>
+          <p>কোনো চ্যানেল পাওয়া যায়নি বা লোড করা সম্ভব হয়নি।</p>
+        </div>
+        <div id="pl-viewer-grid" class="pl-channel-grid"></div>
+      </div>
+
+      <div class="pl-viewer-footer">
+        <button id="btn-pl-load-more" class="btn-more" style="display: none;"><i class="fas fa-chevron-down"></i> আরও চ্যানেল লোড করুন</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══════ MAIN APP WRAPPER ═══════ -->
   <div id="app">
     <!-- Top Navigation Bar -->
@@ -240,14 +277,23 @@
       </div>
     </div>
 
-    <!-- ═══════ VIDEO PLAYER (ArtPlayer / HLS Engine) ═══════ -->
+    <!-- ═══════ VIDEO PLAYER (ArtPlayer / HLS Engine with Full Control Bar) ═══════ -->
     <div id="player-wrap">
       <div id="art-player">
         <video id="main-video" playsinline webkit-playsinline></video>
+        
+        <!-- Big Play Button Overlay -->
+        <button id="vctrl-big-play" class="vctrl-big-play" aria-label="Play/Pause" style="display: none;">
+          <i class="fas fa-play"></i>
+        </button>
+
+        <!-- Loading spinner -->
         <div id="video-loader" class="player-loader" style="display: none;">
           <div class="spin-ring"></div>
           <span>স্ট্রীম লোড হচ্ছে...</span>
         </div>
+
+        <!-- Error overlay -->
         <div id="video-error" class="player-error-overlay" style="display: none;">
           <i class="fas fa-triangle-exclamation"></i>
           <span id="player-err-msg">ভিডিও স্ট্রীম প্লে করা সম্ভব হয়নি।</span>
@@ -256,8 +302,64 @@
             <button id="btn-player-next-server" class="btn-err-server"><i class="fas fa-server"></i> পরবর্তী সার্ভার</button>
           </div>
         </div>
+
+        <!-- ═══════ VIDEO CONTROL BAR ═══════ -->
+        <div id="vctrl-bar" class="vctrl-bar">
+          <!-- Seekbar / Timeline -->
+          <div class="vctrl-seek-row">
+            <div class="vctrl-seek-wrap">
+              <div id="vctrl-seek-buffer" class="vctrl-seek-buffer"></div>
+              <div id="vctrl-seek-prog" class="vctrl-seek-prog"></div>
+              <input type="range" id="vctrl-seek-slider" class="vctrl-seek-slider" min="0" max="100" value="0" step="0.1" aria-label="Timeline seek" />
+            </div>
+          </div>
+
+          <!-- Control Buttons Row -->
+          <div class="vctrl-btns-row">
+            <!-- Left group: Play/Pause, -10s, +10s, Volume, Time -->
+            <div class="vctrl-group-l">
+              <button id="vctrl-btn-play" class="vctrl-btn" title="প্লে / পজ" aria-label="Play/Pause">
+                <i class="fas fa-play"></i>
+              </button>
+              <button id="vctrl-btn-rewind" class="vctrl-btn vctrl-btn-skip" title="১০ সেকেন্ড পেছনে" aria-label="Rewind 10s">
+                <i class="fas fa-rotate-left"></i><span>10</span>
+              </button>
+              <button id="vctrl-btn-forward" class="vctrl-btn vctrl-btn-skip" title="১০ সেকেন্ড সামনে" aria-label="Forward 10s">
+                <i class="fas fa-rotate-right"></i><span>10</span>
+              </button>
+
+              <div class="vctrl-vol-group">
+                <button id="vctrl-btn-mute" class="vctrl-btn" title="শব্দ মিউট / আনমিউট" aria-label="Mute/Unmute">
+                  <i class="fas fa-volume-high"></i>
+                </button>
+                <div class="vctrl-vol-slider-wrap">
+                  <input type="range" id="vctrl-vol-slider" class="vctrl-vol-slider" min="0" max="1" step="0.05" value="1" aria-label="Volume slider" />
+                </div>
+              </div>
+
+              <div id="vctrl-time-display" class="vctrl-time-display">
+                <span class="vctrl-live-badge"><span class="vctrl-live-dot"></span> LIVE</span>
+                <span id="vctrl-time-val" class="vctrl-time-val">00:00 / 00:00</span>
+              </div>
+            </div>
+
+            <!-- Right group: Aspect ratio, Picture-in-Picture, Fullscreen -->
+            <div class="vctrl-group-r">
+              <button id="vctrl-btn-aspect" class="vctrl-btn" title="স্ক্রিন সাইজ পরিবর্তন (Fit / Fill)" aria-label="Change aspect ratio">
+                <i class="fas fa-expand"></i><span id="vctrl-aspect-lbl" class="vctrl-aspect-lbl">Fit</span>
+              </button>
+              <button id="vctrl-btn-pip" class="vctrl-btn" title="পিকচার-ইন-পিকচার (PiP)" aria-label="Picture in Picture">
+                <i class="fas fa-clone"></i>
+              </button>
+              <button id="vctrl-btn-fs" class="vctrl-btn" title="ফুলস্ক্রিন" aria-label="Fullscreen">
+                <i class="fas fa-expand-arrows-alt"></i>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
+      <!-- Channel & Server Info Bar (Docked beneath video) -->
       <div id="pw-bar">
         <img id="pw-logo" src="" alt="Logo" onerror="this.src='favicon.svg'" />
         <div class="pw-info-wrap">

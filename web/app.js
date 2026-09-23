@@ -343,16 +343,10 @@ const APP = {
             logo: pl.logo || pl.logoUrl || FALLBACK_LOGO_SVG,
             url: plUrl,
             type: pl.type || (plUrl.includes('.json') ? 'JSON' : 'M3U'),
-            channelCount: pl.channelCount || 0
+            channelCount: pl.channelCount || 0,
+            items: []
           };
           newPlaylists.push(plItem);
-
-          // Fetch the channels inside this playlist
-          try {
-            await this.loadPlaylistContent(plUrl, plName, newChannels, newMovies, newSports, plItem);
-          } catch (e) {
-            console.warn('Error loading playlist:', plName, e);
-          }
         }
       }
     }
@@ -370,10 +364,10 @@ const APP = {
             logo: FALLBACK_LOGO_SVG,
             url: url,
             type: url.includes('.json') ? 'JSON' : 'M3U',
-            channelCount: 0
+            channelCount: 0,
+            items: []
           };
           newPlaylists.push(plItem);
-          await this.loadPlaylistContent(url, 'Live TV', newChannels, newMovies, newSports, plItem);
         }
       }
 
@@ -388,10 +382,10 @@ const APP = {
             logo: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=200&fit=crop',
             url: url,
             type: url.includes('.json') ? 'JSON' : 'M3U',
-            channelCount: 0
+            channelCount: 0,
+            items: []
           };
           newPlaylists.push(plItem);
-          await this.loadPlaylistContent(url, 'Movies', newChannels, newMovies, newSports, plItem);
         }
       }
 
@@ -406,10 +400,10 @@ const APP = {
             logo: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=200&fit=crop',
             url: url,
             type: url.includes('.json') ? 'JSON' : 'M3U',
-            channelCount: 0
+            channelCount: 0,
+            items: []
           };
           newPlaylists.push(plItem);
-          await this.loadPlaylistContent(url, 'Sports', newChannels, newMovies, newSports, plItem);
         }
       }
 
@@ -422,10 +416,10 @@ const APP = {
           logo: 'https://flagcdn.com/w160/bd.png',
           url: fbAppConfig.tapmadJsonUrl,
           type: 'JSON',
-          channelCount: 0
+          channelCount: 0,
+          items: []
         };
         newPlaylists.push(plItem);
-        await this.loadPlaylistContent(fbAppConfig.tapmadJsonUrl, 'Sports', newChannels, newMovies, newSports, plItem);
       }
     }
 
@@ -440,10 +434,10 @@ const APP = {
             logo: FALLBACK_LOGO_SVG,
             url: pl.url,
             type: pl.url.includes('.json') ? 'JSON' : 'M3U',
-            channelCount: 0
+            channelCount: 0,
+            items: []
           };
           newPlaylists.push(plItem);
-          await this.loadPlaylistContent(pl.url, 'Custom', newChannels, newMovies, newSports, plItem);
         }
       }
     }
@@ -491,19 +485,49 @@ const APP = {
       }
     });
 
-    // Assign to state
+    // Assign to state instantly - UI is rendered immediately!
     this.S.channels = uniqueChannels;
     this.S.movies = uniqueMovies;
     this.S.sports = uniqueSports;
     this.S.playlists = uniquePlaylists;
     this.S.matches = newMatches;
 
-    // Update Counts
+    // Update Counts & render all views
     this.updateBadges();
-
-    // Re-render UI
     this.renderAllViews();
     this.renderUpcomingCarousel();
+
+    // Background fetch: load popular playlists asynchronously without blocking the UI
+    setTimeout(() => {
+      this.backgroundLoadTopPlaylists();
+    }, 100);
+  },
+
+  // Background playlist loader for top 3 popular playlists
+  async backgroundLoadTopPlaylists() {
+    const topPlaylists = this.S.playlists.slice(0, 4);
+    for (const pl of topPlaylists) {
+      if (pl.items && pl.items.length > 0) continue;
+      try {
+        const text = await this.fetchWithFallback(pl.url);
+        if (text) {
+          const items = this.parsePlaylistText(text, pl.name || 'Live TV');
+          if (items && items.length > 0) {
+            pl.items = items;
+            pl.channelCount = items.length;
+            items.forEach(it => {
+              if (!this.S.channels.some(c => c.url === it.url)) {
+                this.S.channels.push(it);
+              }
+            });
+            this.updateBadges();
+            this.renderPlaylists();
+          }
+        }
+      } catch (err) {
+        console.warn('Background playlist load error:', pl.name, err);
+      }
+    }
   },
 
   splitUrls(raw) {
@@ -527,239 +551,322 @@ const APP = {
   },
 
   // ═══════════════════════════════════════════
-  // 5. UNIVERSAL PLAYLIST & JSON PARSER
+  // 5. UNIVERSAL PLAYLIST & JSON ENGINE
   // ═══════════════════════════════════════════
-  async loadPlaylistContent(url, defaultCategory, outChannels, outMovies, outSports, plItemObj) {
-    if (!url || typeof url !== 'string') return;
-    let addedCount = 0;
+  async fetchWithFallback(url) {
+    if (!url || typeof url !== 'string') return null;
+    const cleanUrl = url.trim();
 
+    // 1. Direct fetch with 6 second timeout
     try {
-      const res = await fetch(url.trim(), { cache: 'no-store' });
-      if (!res.ok) return;
-      const text = await res.text();
-      const trimmed = text.trim();
-
-      // CASE A: JSON (Categories, Movies, Tapmad, or Footy Live)
-      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        try {
-          const json = JSON.parse(trimmed);
-
-          // 1. Category-based JSON (e.g. Update Channel.m3u or movies.json: { categories: [...] })
-          if (json.categories && Array.isArray(json.categories)) {
-            json.categories.forEach(catObj => {
-              const catName = catObj.category_name || defaultCategory;
-              const items = catObj.movies || catObj.channels || [];
-              items.forEach(it => {
-                const title = it.title || it.name || 'Untitled';
-                const poster = it.poster || it.logo || it.icon || '';
-                const servers = (it.sources || it.servers || []).map(s => ({
-                  name: s.server_name || s.name || 'Server',
-                  url: s.url || s.streamUrl
-                })).filter(s => s.url);
-
-                const primaryUrl = (servers[0] ? servers[0].url : '') || it.url || it.streamUrl;
-
-                if (primaryUrl) {
-                  addedCount++;
-                  // Determine if movie or TV channel based on category name or fields
-                  const isMovie = defaultCategory === 'Movies' ||
-                    catName.toLowerCase().includes('movie') ||
-                    catName.toLowerCase().includes('cinema') ||
-                    catName.toLowerCase().includes('serial') ||
-                    it.year || it.rating;
-
-                  if (isMovie) {
-                    outMovies.push({
-                      id: 'mov_' + Math.random().toString(36).substring(2, 8),
-                      title: title,
-                      category: catName,
-                      poster: poster,
-                      url: primaryUrl,
-                      servers: servers,
-                      rating: it.rating || 'HD',
-                      year: it.year || '',
-                      description: it.description || ''
-                    });
-                  } else {
-                    outChannels.push({
-                      id: 'ch_' + Math.random().toString(36).substring(2, 8),
-                      name: title,
-                      category: catName,
-                      logo: poster,
-                      url: primaryUrl,
-                      servers: servers,
-                      isLive: true
-                    });
-                  }
-                }
-              });
-            });
-          }
-
-          // 2. Tapmad Sports Matches JSON ({ Matches: [...] })
-          else if (json.Matches && Array.isArray(json.Matches)) {
-            json.Matches.forEach(tMatch => {
-              const title = tMatch.VideoName || 'Live Sports';
-              const isLive = String(tMatch.Status).toLowerCase() === 'live';
-              const sUrl = tMatch.stream_url || '';
-              if (sUrl) {
-                addedCount++;
-                const spObj = {
-                  id: 'tapmad_' + (tMatch.EntityId || Math.random().toString(36).substring(2, 7)),
-                  title: title,
-                  name: title,
-                  category: tMatch.CategoryName || 'Sports',
-                  logo: tMatch.ThumbnailStandard || '',
-                  poster: tMatch.ThumbnailStandard || '',
-                  url: sUrl,
-                  servers: [{ name: 'Tapmad Live', url: sUrl }],
-                  isLive: isLive,
-                  time: tMatch.EventStartDate || 'Live Now',
-                  tournament: tMatch.CategoryName || 'Tapmad Sports'
-                };
-                outSports.push(spObj);
-                outChannels.push({
-                  id: spObj.id,
-                  name: title,
-                  category: 'Sports',
-                  logo: spObj.logo,
-                  url: sUrl,
-                  isLive: isLive
-                });
-              }
-            });
-          }
-
-          // 3. Footy Live / CricHD Matches JSON ({ matches: [...] })
-          else if (json.matches && Array.isArray(json.matches)) {
-            json.matches.forEach(m => {
-              const mName = m['match name'] || m.title || 'Live Match';
-              const channels = m.Channels || [];
-              const servers = channels.map(c => ({
-                name: c.channel_name || 'Server',
-                url: c.url
-              })).filter(s => s.url);
-
-              const sUrl = servers[0] ? servers[0].url : (m.streamUrl || '');
-              if (sUrl || servers.length > 0) {
-                addedCount++;
-                const spObj = {
-                  id: 'ft_' + Math.random().toString(36).substring(2, 8),
-                  title: mName,
-                  name: mName,
-                  category: m.Category || 'Football',
-                  logo: m['Team 1 Logo'] || '',
-                  poster: m['Team 1 Logo'] || '',
-                  team1: m['Team 1 Name'] || '',
-                  team1Logo: m['Team 1 Logo'] || '',
-                  team2: m['Team 2 Name'] || '',
-                  team2Logo: m['Team 2 Logo'] || '',
-                  url: sUrl,
-                  servers: servers,
-                  isLive: String(m.Status).toLowerCase() === 'live',
-                  time: m['Start time'] || 'Live',
-                  tournament: m['Tour/Group name'] || 'Live Tournament'
-                };
-                outSports.push(spObj);
-              }
-            });
-          }
-
-          // 4. Standard Array of Items ([ { name, url, logo, category } ])
-          else if (Array.isArray(json)) {
-            json.forEach(it => {
-              const sUrl = it.url || it.streamUrl || (it.servers && it.servers[0] ? it.servers[0].url : '');
-              if (sUrl) {
-                addedCount++;
-                const itemCat = it.category || defaultCategory;
-                const isMov = defaultCategory === 'Movies' || itemCat.toLowerCase().includes('movie');
-
-                if (isMov) {
-                  outMovies.push({
-                    id: 'm_' + Math.random().toString(36).substring(2, 8),
-                    title: it.name || it.title || 'Movie',
-                    category: itemCat,
-                    poster: it.logo || it.poster || '',
-                    url: sUrl,
-                    servers: it.servers || [{ name: 'Server 1', url: sUrl }]
-                  });
-                } else {
-                  outChannels.push({
-                    id: 'ch_' + Math.random().toString(36).substring(2, 8),
-                    name: it.name || it.title || 'Channel',
-                    category: itemCat,
-                    logo: it.logo || it.icon || '',
-                    url: sUrl,
-                    servers: it.servers || [{ name: 'Server 1', url: sUrl }],
-                    isLive: it.isLive !== false
-                  });
-                }
-              }
-            });
-          }
-
-          if (plItemObj) plItemObj.channelCount = addedCount;
-          return;
-        } catch (jsonErr) {
-          console.warn('JSON parse error on', url, jsonErr);
-        }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(cleanUrl, { signal: controller.signal, cache: 'no-store' });
+      clearTimeout(timer);
+      if (res.ok) {
+        return await res.text();
       }
+    } catch (e) {
+      // direct fetch failed (CORS or network)
+    }
 
-      // CASE B: Standard M3U / M3U8 Playlist
-      if (trimmed.includes('#EXTM3U') || trimmed.includes('#EXTINF') || trimmed.includes('http')) {
-        const lines = trimmed.split(/\r?\n/);
-        let curName = '';
-        let curLogo = '';
-        let curCat = defaultCategory;
+    // 2. CORS Proxy Fallback (AllOrigins)
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}`;
+      const res = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        return await res.text();
+      }
+    } catch (e) {
+      // proxy 1 failed
+    }
 
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (line.startsWith('#EXTINF:')) {
-            const logoMatch = line.match(/tvg-logo="([^"]+)"/i);
-            curLogo = logoMatch ? logoMatch[1] : '';
+    // 3. CORS Proxy Fallback (corsproxy.io)
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
+      const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(cleanUrl)}`;
+      const res = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        return await res.text();
+      }
+    } catch (e) {}
 
-            const groupMatch = line.match(/group-title="([^"]+)"/i);
-            curCat = groupMatch ? groupMatch[1] : defaultCategory;
+    return null;
+  },
 
-            const commaIdx = line.lastIndexOf(',');
-            curName = commaIdx !== -1 ? line.substring(commaIdx + 1).trim() : 'Channel';
-          } else if (line.startsWith('http://') || line.startsWith('https://')) {
-            if (curName && line) {
-              addedCount++;
-              const isMov = defaultCategory === 'Movies' || curCat.toLowerCase().includes('movie') || curCat.toLowerCase().includes('cinema');
+  parsePlaylistText(text, defaultCategory = 'Live TV') {
+    if (!text || typeof text !== 'string') return [];
+    const trimmed = text.trim();
+    const items = [];
 
-              if (isMov) {
-                outMovies.push({
-                  id: 'm3u_mov_' + Math.random().toString(36).substring(2, 8),
-                  title: curName,
-                  category: curCat,
-                  poster: curLogo,
-                  url: line,
-                  servers: [{ name: 'Main Server', url: line }]
-                });
-              } else {
-                outChannels.push({
-                  id: 'm3u_' + Math.random().toString(36).substring(2, 8),
-                  name: curName,
-                  category: curCat,
-                  logo: curLogo,
-                  url: line,
-                  servers: [{ name: 'সার্ভার ১', url: line }],
+    // CASE A: JSON (Categories, Movies, Tapmad, or Footy Live)
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        const json = JSON.parse(trimmed);
+
+        // 1. Category-based JSON ({ categories: [...] })
+        if (json.categories && Array.isArray(json.categories)) {
+          json.categories.forEach(catObj => {
+            const catName = catObj.category_name || defaultCategory;
+            const subItems = catObj.movies || catObj.channels || [];
+            subItems.forEach(it => {
+              const title = it.title || it.name || 'Channel';
+              const poster = it.poster || it.logo || it.icon || '';
+              const servers = (it.sources || it.servers || []).map(s => ({
+                name: s.server_name || s.name || 'Server',
+                url: s.url || s.streamUrl
+              })).filter(s => s.url);
+              const primaryUrl = (servers[0] ? servers[0].url : '') || it.url || it.streamUrl;
+              if (primaryUrl) {
+                items.push({
+                  id: 'json_ch_' + Math.random().toString(36).substring(2, 8),
+                  name: title,
+                  category: catName,
+                  logo: poster,
+                  poster: poster,
+                  url: primaryUrl,
+                  servers: servers.length > 0 ? servers : [{ name: 'সার্ভার ১', url: primaryUrl }],
                   isLive: true
                 });
               }
+            });
+          });
+        }
+        // 2. Tapmad Sports Matches JSON ({ Matches: [...] })
+        else if (json.Matches && Array.isArray(json.Matches)) {
+          json.Matches.forEach(tMatch => {
+            const title = tMatch.VideoName || 'Live Sports';
+            const sUrl = tMatch.stream_url || '';
+            if (sUrl) {
+              items.push({
+                id: 'tapmad_' + (tMatch.EntityId || Math.random().toString(36).substring(2, 7)),
+                name: title,
+                category: tMatch.CategoryName || 'Sports',
+                logo: tMatch.ThumbnailStandard || '',
+                url: sUrl,
+                servers: [{ name: 'Tapmad Live', url: sUrl }],
+                isLive: String(tMatch.Status).toLowerCase() === 'live'
+              });
             }
-            curName = '';
-            curLogo = '';
-            curCat = defaultCategory;
+          });
+        }
+        // 3. Footy Live Matches ({ matches: [...] })
+        else if (json.matches && Array.isArray(json.matches)) {
+          json.matches.forEach(m => {
+            const mName = m['match name'] || m.title || 'Live Match';
+            const channels = m.Channels || [];
+            const servers = channels.map(c => ({
+              name: c.channel_name || 'Server',
+              url: c.url
+            })).filter(s => s.url);
+            const sUrl = servers[0] ? servers[0].url : (m.streamUrl || '');
+            if (sUrl) {
+              items.push({
+                id: 'ft_' + Math.random().toString(36).substring(2, 8),
+                name: mName,
+                category: m.Category || 'Football',
+                logo: m['Team 1 Logo'] || '',
+                url: sUrl,
+                servers: servers.length > 0 ? servers : [{ name: 'Server 1', url: sUrl }],
+                isLive: String(m.Status).toLowerCase() === 'live'
+              });
+            }
+          });
+        }
+        // 4. Standard Array of Items ([ { name, url, logo, category } ])
+        else if (Array.isArray(json)) {
+          json.forEach(it => {
+            const sUrl = it.url || it.streamUrl || (it.servers && it.servers[0] ? it.servers[0].url : '');
+            if (sUrl) {
+              items.push({
+                id: 'arr_ch_' + Math.random().toString(36).substring(2, 8),
+                name: it.name || it.title || 'Channel',
+                category: it.category || defaultCategory,
+                logo: it.logo || it.icon || it.poster || '',
+                url: sUrl,
+                servers: it.servers || [{ name: 'সার্ভার ১', url: sUrl }],
+                isLive: it.isLive !== false
+              });
+            }
+          });
+        }
+        return items;
+      } catch (jsonErr) {
+        console.warn('JSON parse error in parsePlaylistText:', jsonErr);
+      }
+    }
+
+    // CASE B: Standard M3U / M3U8 Playlist
+    if (trimmed.includes('#EXTM3U') || trimmed.includes('#EXTINF') || trimmed.includes('http')) {
+      const lines = trimmed.split(/\r?\n/);
+      let curName = '';
+      let curLogo = '';
+      let curCat = defaultCategory;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('#EXTINF:')) {
+          const logoMatch = line.match(/tvg-logo="([^"]+)"/i);
+          curLogo = logoMatch ? logoMatch[1] : '';
+
+          const groupMatch = line.match(/group-title="([^"]+)"/i);
+          curCat = groupMatch ? groupMatch[1] : defaultCategory;
+
+          const commaIdx = line.lastIndexOf(',');
+          curName = commaIdx !== -1 ? line.substring(commaIdx + 1).trim() : 'Channel';
+        } else if (line.startsWith('http://') || line.startsWith('https://')) {
+          if (curName && line) {
+            items.push({
+              id: 'm3u_' + Math.random().toString(36).substring(2, 8),
+              name: curName,
+              category: curCat,
+              logo: curLogo,
+              url: line,
+              servers: [{ name: 'সার্ভার ১', url: line }],
+              isLive: true
+            });
           }
+          curName = '';
+          curLogo = '';
+          curCat = defaultCategory;
         }
       }
-
-      if (plItemObj) plItemObj.channelCount = addedCount;
-    } catch (err) {
-      console.warn('loadPlaylistContent error on', url, err);
     }
+
+    return items;
+  },
+
+  // ═══════════════════════════════════════════
+  // 6. PLAYLIST CHANNELS VIEWER MODAL
+  // ═══════════════════════════════════════════
+  async openPlaylistViewer(pl) {
+    if (!pl) return;
+    const modal = document.getElementById('pl-viewer-ov');
+    const titleEl = document.getElementById('pl-viewer-title');
+    const logoEl = document.getElementById('pl-viewer-logo');
+    const countEl = document.getElementById('pl-viewer-count');
+    const searchInput = document.getElementById('pl-viewer-search');
+    const loader = document.getElementById('pl-viewer-loader');
+    const emptyEl = document.getElementById('pl-viewer-empty');
+    const grid = document.getElementById('pl-viewer-grid');
+
+    if (!modal) return;
+    modal.style.display = 'flex';
+    this.S.activeViewerPlaylist = pl;
+    this.S.viewerPage = 1;
+
+    if (titleEl) titleEl.textContent = pl.name || 'Playlist';
+    if (logoEl) logoEl.src = pl.logo || FALLBACK_LOGO_SVG;
+    if (searchInput) searchInput.value = '';
+
+    // If channels already cached in pl.items
+    if (pl.items && pl.items.length > 0) {
+      if (loader) loader.style.display = 'none';
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (countEl) countEl.textContent = `${pl.items.length} টি চ্যানেল`;
+      this.renderViewerChannels(pl.items, '');
+      return;
+    }
+
+    // Otherwise, fetch on demand without blocking or freezing
+    if (loader) loader.style.display = 'flex';
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (grid) grid.innerHTML = '';
+    if (countEl) countEl.textContent = 'চ্যানেল লোড হচ্ছে...';
+
+    const text = await this.fetchWithFallback(pl.url);
+    if (loader) loader.style.display = 'none';
+
+    if (!text) {
+      if (emptyEl) emptyEl.style.display = 'flex';
+      if (countEl) countEl.textContent = 'লোড করতে ব্যর্থ হয়েছে';
+      return;
+    }
+
+    const items = this.parsePlaylistText(text, pl.name || 'Channel');
+    pl.items = items;
+    pl.channelCount = items.length;
+
+    // Also enrich global channels collection
+    items.forEach(it => {
+      if (!this.S.channels.some(c => c.url === it.url)) {
+        this.S.channels.push(it);
+      }
+    });
+    this.updateBadges();
+
+    if (countEl) countEl.textContent = `${items.length} টি চ্যানেল`;
+    if (items.length === 0) {
+      if (emptyEl) emptyEl.style.display = 'flex';
+    } else {
+      if (emptyEl) emptyEl.style.display = 'none';
+      this.renderViewerChannels(items, '');
+    }
+  },
+
+  closePlaylistViewer() {
+    const modal = document.getElementById('pl-viewer-ov');
+    if (modal) modal.style.display = 'none';
+    this.S.activeViewerPlaylist = null;
+  },
+
+  renderViewerChannels(items, query = '') {
+    const grid = document.getElementById('pl-viewer-grid');
+    const emptyEl = document.getElementById('pl-viewer-empty');
+    const loadMoreBtn = document.getElementById('btn-pl-load-more');
+    if (!grid) return;
+
+    let filtered = items;
+    if (query) {
+      const q = query.toLowerCase();
+      filtered = items.filter(it =>
+        (it.name || '').toLowerCase().includes(q) ||
+        (it.category || '').toLowerCase().includes(q)
+      );
+    }
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '';
+      if (emptyEl) emptyEl.style.display = 'flex';
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    const pageSize = 40;
+    const pageItems = filtered.slice(0, this.S.viewerPage * pageSize);
+
+    grid.innerHTML = pageItems.map(it => {
+      const logo = it.logo || FALLBACK_LOGO_SVG;
+      return `
+        <div class="pl-ch-card" data-url="${escHtml(it.url)}">
+          <img class="pl-ch-logo" src="${escHtml(logo)}" alt="${escHtml(it.name)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
+          <div class="pl-ch-name" title="${escHtml(it.name)}">${escHtml(it.name)}</div>
+          <span class="pl-ch-cat">${escHtml(it.category || 'Live')}</span>
+          <button class="pl-ch-btn-play"><i class="fas fa-play"></i> প্লে করুন</button>
+        </div>
+      `;
+    }).join('');
+
+    if (loadMoreBtn) {
+      loadMoreBtn.style.display = pageItems.length < filtered.length ? 'block' : 'none';
+    }
+
+    grid.querySelectorAll('.pl-ch-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const u = card.dataset.url;
+        const target = items.find(x => x.url === u);
+        if (target) {
+          this.closePlaylistViewer();
+          this.playItem(target);
+        }
+      });
+    });
   },
 
   normalizeItems(objOrArr, defaultCategory) {
@@ -1300,10 +1407,12 @@ const APP = {
 
     grid.querySelectorAll('.pl-card').forEach(card => {
       card.addEventListener('click', () => {
-        const plName = card.dataset.name;
-        // Filter Live TV by playlist name or switch to live TV
-        this.S.tvCatFilter = '';
-        this.switchTab('livetv');
+        const url = card.dataset.url;
+        const name = card.dataset.name;
+        const pl = this.S.playlists.find(p => (p.url && p.url === url) || p.name === name);
+        if (pl) {
+          this.openPlaylistViewer(pl);
+        }
       });
     });
   },
@@ -1904,6 +2013,285 @@ const APP = {
     bindPreset('preset-live-tv', 'https://raw.githubusercontent.com/nafitv24-web/NAFI-TV/refs/heads/main/Update%20Channel.m3u');
     bindPreset('preset-nafi-sports', 'https://raw.githubusercontent.com/nafitv24-web/NAFI-TV/refs/heads/main/Sports%20Channel%20NF.m3u');
     bindPreset('preset-movies-json', 'https://raw.githubusercontent.com/nafitv24-web/NAFI-TV/refs/heads/main/movies.json');
+
+    // Playlist Viewer modal events
+    const btnClosePl = document.getElementById('btn-close-pl-viewer');
+    if (btnClosePl) btnClosePl.addEventListener('click', () => this.closePlaylistViewer());
+
+    const plViewerOv = document.getElementById('pl-viewer-ov');
+    if (plViewerOv) {
+      plViewerOv.addEventListener('click', (e) => {
+        if (e.target === plViewerOv) this.closePlaylistViewer();
+      });
+    }
+
+    const plSearch = document.getElementById('pl-viewer-search');
+    if (plSearch) {
+      plSearch.addEventListener('input', (e) => {
+        if (this.S.activeViewerPlaylist && this.S.activeViewerPlaylist.items) {
+          this.S.viewerPage = 1;
+          this.renderViewerChannels(this.S.activeViewerPlaylist.items, e.target.value.trim());
+        }
+      });
+    }
+
+    const btnPlMore = document.getElementById('btn-pl-load-more');
+    if (btnPlMore) {
+      btnPlMore.addEventListener('click', () => {
+        if (this.S.activeViewerPlaylist && this.S.activeViewerPlaylist.items) {
+          this.S.viewerPage++;
+          const q = plSearch ? plSearch.value.trim() : '';
+          this.renderViewerChannels(this.S.activeViewerPlaylist.items, q);
+        }
+      });
+    }
+
+    // Initialize Video Controls
+    this.initVideoControls();
+  },
+
+  // ═══════════════════════════════════════════
+  // 9. MODERN VIDEO CONTROLS ENGINE
+  // ═══════════════════════════════════════════
+  initVideoControls() {
+    const video = this.E['main-video'];
+    const pWrap = this.E['player-wrap'];
+    const vctrlBar = document.getElementById('vctrl-bar');
+    const btnBigPlay = document.getElementById('vctrl-big-play');
+    const btnPlay = document.getElementById('vctrl-btn-play');
+    const btnRewind = document.getElementById('vctrl-btn-rewind');
+    const btnForward = document.getElementById('vctrl-btn-forward');
+    const btnMute = document.getElementById('vctrl-btn-mute');
+    const volSlider = document.getElementById('vctrl-vol-slider');
+    const seekSlider = document.getElementById('vctrl-seek-slider');
+    const seekProg = document.getElementById('vctrl-seek-prog');
+    const seekBuffer = document.getElementById('vctrl-seek-buffer');
+    const timeDisplay = document.getElementById('vctrl-time-display');
+    const timeVal = document.getElementById('vctrl-time-val');
+    const btnAspect = document.getElementById('vctrl-btn-aspect');
+    const aspectLbl = document.getElementById('vctrl-aspect-lbl');
+    const btnPip = document.getElementById('vctrl-btn-pip');
+    const btnFs = document.getElementById('vctrl-btn-fs');
+
+    if (!video) return;
+
+    let isSeeking = false;
+    let hideTimer = null;
+
+    const showControls = () => {
+      if (this.S.isLocked) return;
+      if (vctrlBar) vctrlBar.classList.remove('vctrl-hidden');
+      clearTimeout(hideTimer);
+      if (!video.paused) {
+        hideTimer = setTimeout(() => {
+          if (!video.paused && !isSeeking) {
+            if (vctrlBar) vctrlBar.classList.add('vctrl-hidden');
+          }
+        }, 3500);
+      }
+    };
+
+    const artPlayer = document.getElementById('art-player');
+    if (artPlayer) {
+      artPlayer.addEventListener('pointermove', showControls);
+      artPlayer.addEventListener('touchstart', showControls, { passive: true });
+      artPlayer.addEventListener('click', (e) => {
+        if (e.target === video || e.target === artPlayer) {
+          if (video.paused) video.play().catch(() => {});
+          else video.pause();
+        }
+        showControls();
+      });
+    }
+
+    const togglePlayPause = () => {
+      if (video.paused) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    };
+
+    if (btnPlay) btnPlay.addEventListener('click', (e) => { e.stopPropagation(); togglePlayPause(); });
+    if (btnBigPlay) btnBigPlay.addEventListener('click', (e) => { e.stopPropagation(); togglePlayPause(); });
+
+    if (btnRewind) {
+      btnRewind.addEventListener('click', (e) => {
+        e.stopPropagation();
+        video.currentTime = Math.max(0, video.currentTime - 10);
+        showControls();
+      });
+    }
+
+    if (btnForward) {
+      btnForward.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const max = isFinite(video.duration) ? video.duration : Infinity;
+        video.currentTime = Math.min(max, video.currentTime + 10);
+        showControls();
+      });
+    }
+
+    const updatePlayState = () => {
+      const isPaused = video.paused;
+      if (btnPlay) {
+        btnPlay.innerHTML = isPaused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+      }
+      if (btnBigPlay) {
+        btnBigPlay.style.display = isPaused ? 'flex' : 'none';
+      }
+      showControls();
+    };
+
+    video.addEventListener('play', updatePlayState);
+    video.addEventListener('pause', updatePlayState);
+    video.addEventListener('playing', updatePlayState);
+
+    const formatTime = (sec) => {
+      if (isNaN(sec) || !isFinite(sec) || sec < 0) return '00:00';
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      const h = Math.floor(m / 60);
+      if (h > 0) {
+        const mm = m % 60;
+        return `${h}:${mm < 10 ? '0' : ''}${mm}:${s < 10 ? '0' : ''}${s}`;
+      }
+      return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    };
+
+    video.addEventListener('timeupdate', () => {
+      if (isSeeking) return;
+      const dur = video.duration;
+      const cur = video.currentTime;
+
+      if (isFinite(dur) && dur > 0) {
+        const pct = (cur / dur) * 100;
+        if (seekProg) seekProg.style.width = pct + '%';
+        if (seekSlider) seekSlider.value = pct;
+        if (timeVal) timeVal.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+        if (timeDisplay) {
+          const liveBadge = timeDisplay.querySelector('.vctrl-live-badge');
+          if (liveBadge) liveBadge.style.display = 'none';
+        }
+      } else {
+        // Live stream
+        if (seekProg) seekProg.style.width = '100%';
+        if (seekSlider) seekSlider.value = 100;
+        if (timeVal) timeVal.textContent = formatTime(cur);
+        if (timeDisplay) {
+          const liveBadge = timeDisplay.querySelector('.vctrl-live-badge');
+          if (liveBadge) liveBadge.style.display = 'inline-flex';
+        }
+      }
+    });
+
+    video.addEventListener('progress', () => {
+      if (video.buffered.length > 0 && isFinite(video.duration) && video.duration > 0) {
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        const pct = (bufferedEnd / video.duration) * 100;
+        if (seekBuffer) seekBuffer.style.width = pct + '%';
+      }
+    });
+
+    if (seekSlider) {
+      seekSlider.addEventListener('input', (e) => {
+        isSeeking = true;
+        const pct = parseFloat(e.target.value);
+        if (seekProg) seekProg.style.width = pct + '%';
+        if (isFinite(video.duration) && video.duration > 0) {
+          const targetTime = (pct / 100) * video.duration;
+          if (timeVal) timeVal.textContent = `${formatTime(targetTime)} / ${formatTime(video.duration)}`;
+        }
+      });
+      seekSlider.addEventListener('change', (e) => {
+        const pct = parseFloat(e.target.value);
+        if (isFinite(video.duration) && video.duration > 0) {
+          video.currentTime = (pct / 100) * video.duration;
+        }
+        isSeeking = false;
+        showControls();
+      });
+    }
+
+    const updateVolumeIcon = () => {
+      if (!btnMute) return;
+      if (video.muted || video.volume === 0) {
+        btnMute.innerHTML = '<i class="fas fa-volume-xmark" style="color:#ef4444;"></i>';
+      } else if (video.volume < 0.5) {
+        btnMute.innerHTML = '<i class="fas fa-volume-low"></i>';
+      } else {
+        btnMute.innerHTML = '<i class="fas fa-volume-high"></i>';
+      }
+    };
+
+    if (btnMute) {
+      btnMute.addEventListener('click', (e) => {
+        e.stopPropagation();
+        video.muted = !video.muted;
+        updateVolumeIcon();
+        if (volSlider) volSlider.value = video.muted ? 0 : video.volume;
+        showControls();
+      });
+    }
+
+    if (volSlider) {
+      volSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        video.volume = val;
+        video.muted = (val === 0);
+        updateVolumeIcon();
+        showControls();
+      });
+    }
+
+    const aspectModes = ['aspect-fit', 'aspect-fill', 'aspect-stretch'];
+    const aspectLabels = ['Fit', 'Fill', '16:9'];
+    let aspectIdx = 0;
+
+    if (btnAspect) {
+      btnAspect.addEventListener('click', (e) => {
+        e.stopPropagation();
+        aspectModes.forEach(cls => video.classList.remove(cls));
+        aspectIdx = (aspectIdx + 1) % aspectModes.length;
+        video.classList.add(aspectModes[aspectIdx]);
+        if (aspectLbl) aspectLbl.textContent = aspectLabels[aspectIdx];
+        showControls();
+      });
+    }
+
+    if (btnPip) {
+      btnPip.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+          } else if (video.requestPictureInPicture) {
+            await video.requestPictureInPicture();
+          }
+        } catch (err) {
+          console.warn('PiP error:', err);
+        }
+      });
+    }
+
+    if (btnFs) {
+      btnFs.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = pWrap || video;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (target.requestFullscreen) target.requestFullscreen().catch(() => {});
+          else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+          else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+        } else {
+          if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        }
+        showControls();
+      });
+    }
+
+    updatePlayState();
+    updateVolumeIcon();
   },
 
   // ═══════════════════════════════════════════
@@ -1947,37 +2335,51 @@ const APP = {
     const urlInput = this.E['import-url-input'];
     const fileInput = this.E['import-file-input'];
 
-    const newChannels = [];
-    const newMovies = [];
-    const newSports = [];
+    let items = [];
+    let plName = 'Custom Playlist';
+    let plUrl = '';
 
     if (urlInput && urlInput.value.trim()) {
-      const url = urlInput.value.trim();
-      const plItem = {
-        name: this.extractPlaylistName(url, 'Custom Playlist'),
-        url: url
-      };
-      await this.loadPlaylistContent(url, 'Custom', newChannels, newMovies, newSports, plItem);
-
-      this.S.customPlaylists.push(plItem);
-      Store.set('custom_playlists', this.S.customPlaylists);
+      plUrl = urlInput.value.trim();
+      plName = this.extractPlaylistName(plUrl, 'Custom Playlist');
+      const text = await this.fetchWithFallback(plUrl);
+      if (text) {
+        items = this.parsePlaylistText(text, plName);
+      }
     } else if (fileInput && fileInput.files && fileInput.files[0]) {
       const file = fileInput.files[0];
+      plName = file.name.replace(/\.[^/.]+$/, '');
       const text = await file.text();
-      const fakeUrl = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-      const plItem = { name: file.name.replace(/\.[^/.]+$/, ''), url: fakeUrl };
-      await this.loadPlaylistContent(fakeUrl, 'Custom', newChannels, newMovies, newSports, plItem);
+      plUrl = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+      items = this.parsePlaylistText(text, plName);
     }
 
-    if (newChannels.length > 0 || newMovies.length > 0 || newSports.length > 0) {
-      this.S.channels = [...newChannels, ...this.S.channels];
-      this.S.movies = [...newMovies, ...this.S.movies];
-      this.S.sports = [...newSports, ...this.S.sports];
+    if (items.length > 0) {
+      const plItem = {
+        id: 'custom_' + Math.random().toString(36).substring(2, 8),
+        name: plName,
+        description: 'ইউজার কর্তৃক যোগ করা কাস্টম প্লেলিস্ট',
+        logo: FALLBACK_LOGO_SVG,
+        url: plUrl,
+        type: plUrl.includes('.json') ? 'JSON' : 'M3U',
+        channelCount: items.length,
+        items: items
+      };
+
+      this.S.playlists.unshift(plItem);
+      this.S.customPlaylists.push({ name: plName, url: plUrl });
+      Store.set('custom_playlists', this.S.customPlaylists);
+
+      items.forEach(it => {
+        if (!this.S.channels.some(c => c.url === it.url)) {
+          this.S.channels.push(it);
+        }
+      });
 
       this.updateBadges();
       this.renderAllViews();
       this.closeImportModal();
-      alert(`সফলভাবে ${newChannels.length + newMovies.length + newSports.length} টি কনটেন্ট যুক্ত হয়েছে!`);
+      alert(`সফলভাবে ${items.length} টি কনটেন্ট যুক্ত হয়েছে!`);
     } else {
       alert('প্লেলিস্ট ফাইল বা লিঙ্কটি সঠিক নয়। অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
     }
