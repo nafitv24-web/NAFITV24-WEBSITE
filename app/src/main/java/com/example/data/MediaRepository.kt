@@ -80,15 +80,18 @@ class MediaRepository(private val context: Context) {
     companion object {
         const val DEFAULT_MARQUEE_TEXT = "বাংলাদেশ ব্যাংকের নতুন মুদ্রানীতি ঘোষণা। পুঁজিবাজারে ঊর্ধ্বগতি। NAFI TV24 এ ক্রিকেট, ফুটবল ও লাইভ টিভি চ্যানেল সম্পূর্ণ বিনামূল্যে উপভোগ করুন।"
         const val DEFAULT_RTDB_URL = "https://nafitv24-live-default-rtdb.firebaseio.com/"
-        const val DEFAULT_LIVE_TV_M3U_URL = "https://raw.githubusercontent.com/nfiptv24-max/NAFITV/refs/heads/main/Nafitv24.m3u"
-        const val DEFAULT_SPORTS_M3U_URL = "https://raw.githubusercontent.com/nfiptv24-max/NAFITV/refs/heads/main/NAFI%20Sports.m3u"
-        const val DEFAULT_TAPMAD_JSON_URL = "https://raw.githubusercontent.com/srhady/tapmad-bd/refs/heads/main/tapmad_bd.json"
+        const val DEFAULT_TAPMAD_JSON_URL = "https://gist.githubusercontent.com/albatr0ssss/3cff7a26be49b1d352c15f615067e7cd/raw/tapmad_bd.json"
+        const val DEFAULT_PRIME_SPORTS_M3U_URL = "https://raw.githubusercontent.com/srhady/willow-event/refs/heads/main/primevideo_sports.m3u"
+        const val DEFAULT_FAST_TV_M3U_URL = "https://raw.githubusercontent.com/ahan443/FAST-IPTV/refs/heads/main/z.m3u"
+        const val DEFAULT_NAFI_TV_UPDATE_URL = "https://raw.githubusercontent.com/nafitv24-web/NAFI-TV/refs/heads/main/Update%20Channel.m3u"
+        const val DEFAULT_LIVE_TV_M3U_URL = DEFAULT_FAST_TV_M3U_URL
+        const val DEFAULT_SPORTS_M3U_URL = DEFAULT_PRIME_SPORTS_M3U_URL
         const val DEFAULT_TAPMAD_M3U_URL = "https://raw.githubusercontent.com/srhady/tapmad-bd/refs/heads/main/tapmad_bd.m3u"
-        const val DEFAULT_MOVIES_JSON_URL = "https://raw.githubusercontent.com/nafitv24-web/NAFI-TV/refs/heads/main/movies.json"
-        const val DEFAULT_MOVIES_M3U_URL = DEFAULT_MOVIES_JSON_URL
+        const val DEFAULT_MOVIES_JSON_URL = DEFAULT_NAFI_TV_UPDATE_URL
+        const val DEFAULT_MOVIES_M3U_URL = DEFAULT_FAST_TV_M3U_URL
         const val DEFAULT_MIX_MOVIES_M3U_URL = "https://raw.githubusercontent.com/abusaeeidx/Movie-Playlist-Auto-update/refs/heads/main/Mix_Movies.m3u"
         const val DEFAULT_LATEST_MOVIES_M3U_URL = "https://raw.githubusercontent.com/srhady/join_telegram_chennal-livesportsplay/refs/heads/main/latest_movies.m3u"
-        const val DEFAULT_M3U_URL = DEFAULT_LIVE_TV_M3U_URL
+        const val DEFAULT_M3U_URL = DEFAULT_FAST_TV_M3U_URL
         const val DEFAULT_ADMIN_PIN = "40541273"
         const val FIREBASE_PROJECT_ID = "nafitv24-live"
         const val FIREBASE_API_KEY = "AIzaSyDEhKK6T9kpKHICq4VSAXWoIQwQtfDFAX8"

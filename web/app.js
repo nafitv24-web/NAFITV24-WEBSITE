@@ -1,1090 +1,603 @@
 /**
- * NAFI TV 24 – Web Edition Core Application Script
- * Complete integration: HLS Video Player, Firebase RTDB (Live TV, Movies, Sports, Playlists),
- * Multi-Server Fallback, Category Filters, and 4 Main Section Tabs.
+ * ══════════════════════════════════════════════════════════════════════════════
+ * NAFI TV 24 – Web Application Engine
+ * Disconnected from Firebase. Powered by direct high-speed endpoints:
+ * 1. Live Events: Tapmad BD JSON & Prime Video Sports M3U (DASH/ClearKey)
+ * 2. Live TV: FAST TV (BDIX) M3U & NAFI TV24 Categorized Multi-Server JSON
+ * 3. Download Our App: Showcase & direct APK download
+ * ══════════════════════════════════════════════════════════════════════════════
  */
 
 'use strict';
 
-// ═══════════════════════════════════════════
-// 1. CONSTANTS & FIREBASE RTDB CONFIG
-// ═══════════════════════════════════════════
-const DEFAULT_RTDB_URL = 'https://nafitv24-live-default-rtdb.firebaseio.com';
-const FALLBACK_LOGO_SVG = 'favicon.svg';
+const FALLBACK_LOGO_SVG = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%23e50914"/><text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-weight="900" font-size="20" fill="%23ffffff">TV</text></svg>';
 
-// Built-in verified channels for zero-downtime start
-const BUILT_IN_CHANNELS = [
-  {
-    id: 'tsports_hd',
-    name: 'T Sports HD',
-    category: 'Sports',
-    logo: 'https://flagcdn.com/w160/bd.png',
-    url: 'https://live-tsports.akamaized.net/live/tsports/master.m3u8',
-    servers: [
-      { name: 'সার্ভার ১ (HLS)', url: 'https://live-tsports.akamaized.net/live/tsports/master.m3u8' },
-      { name: 'সার্ভার ২ (HD)', url: 'http://103.185.24.134:3001/TSportsHD/tracks-v1a1/mono.m3u8' },
-      { name: 'সার্ভার ৩', url: 'https://tvsen5.aynaott.com/TnMn5kZz8aLm/tracks-v1a1/mono.ts.m3u8' }
-    ],
-    isLive: true,
-    pinned: true
-  },
-  {
-    id: 'gtv_live',
-    name: 'GTV (Gazi TV)',
-    category: 'Sports',
-    logo: 'https://flagcdn.com/w160/bd.png',
-    url: 'https://live.cholebengal.com/live/gtv/index.m3u8',
-    servers: [
-      { name: 'সার্ভার ১ (HLS)', url: 'https://live.cholebengal.com/live/gtv/index.m3u8' }
-    ],
-    isLive: true,
-    pinned: true
-  },
-  {
-    id: 'star_sports_1',
-    name: 'Star Sports 1 HD',
-    category: 'Sports',
-    logo: 'https://flagcdn.com/w160/in.png',
-    url: 'https://stream.crichd.vip/live/starsports1.m3u8',
-    servers: [
-      { name: 'সার্ভার ১ (HD)', url: 'https://stream.crichd.vip/live/starsports1.m3u8' },
-      { name: 'সার্ভার ২', url: 'https://live.crichd.tv/live/ss1hd.m3u8' }
-    ],
-    isLive: true,
-    pinned: true
-  },
-  {
-    id: 'sony_sports_ten_1',
-    name: 'Sony Sports Ten 1 HD',
-    category: 'Sports',
-    logo: 'https://flagcdn.com/w160/in.png',
-    url: 'https://stream.crichd.vip/live/sonysportsten1.m3u8',
-    servers: [
-      { name: 'সার্ভার ১', url: 'https://stream.crichd.vip/live/sonysportsten1.m3u8' },
-      { name: 'সার্ভার ২', url: 'https://drk6xq0vhn.gpcdn.net/live/ten_1_hd_720/index.m3u8' }
-    ],
-    isLive: true
-  },
-  {
-    id: 'willow_cricket',
-    name: 'Willow Cricket HD',
-    category: 'Sports',
-    logo: 'https://flagcdn.com/w160/us.png',
-    url: 'https://stream.crichd.vip/live/willowusa.m3u8',
-    servers: [
-      { name: 'সার্ভার ১', url: 'https://stream.crichd.vip/live/willowusa.m3u8' },
-      { name: 'সার্ভার ২', url: 'https://digitalotthub.com/tv/dd/live.php/598.m3u8' }
-    ],
-    isLive: true
-  },
-  {
-    id: 'somoy_tv',
-    name: 'Somoy TV (সময় টিভি)',
-    category: 'News',
-    logo: 'https://flagcdn.com/w160/bd.png',
-    url: 'https://live.somoynews.tv/hls/live.m3u8',
-    isLive: true
-  },
-  {
-    id: 'jamuna_tv',
-    name: 'Jamuna TV HD',
-    category: 'News',
-    logo: 'https://flagcdn.com/w160/bd.png',
-    url: 'https://live.jamuna.tv/hls/stream.m3u8',
-    isLive: true
-  },
-  {
-    id: 'dbc_news',
-    name: 'DBC News HD',
-    category: 'News',
-    logo: 'https://flagcdn.com/w160/bd.png',
-    url: 'https://dbc.live/hls/dbc.m3u8',
-    isLive: true
-  },
-  {
-    id: 'channel_i',
-    name: 'Channel i (চ্যানেল আই)',
-    category: 'Entertainment',
-    logo: 'https://flagcdn.com/w160/bd.png',
-    url: 'https://live.channelionline.com/hls/channel-i.m3u8',
-    isLive: true
-  },
-  {
-    id: 'deepto_tv',
-    name: 'Deepto TV (দীপ্ত টিভি)',
-    category: 'Entertainment',
-    logo: 'https://flagcdn.com/w160/bd.png',
-    url: 'https://live.deeptotv.com/hls/deeptotv.m3u8',
-    isLive: true
-  }
-];
-
-// ═══════════════════════════════════════════
-// 2. LOCAL STORAGE HELPER
-// ═══════════════════════════════════════════
-const Store = {
-  get(key, defaultVal = null) {
-    try {
-      const v = localStorage.getItem(key);
-      return v !== null ? JSON.parse(v) : defaultVal;
-    } catch {
-      return defaultVal;
-    }
-  },
-  set(key, val) {
-    try {
-      localStorage.setItem(key, JSON.stringify(val));
-    } catch (e) {
-      console.warn('Store.set error:', key, e);
-    }
-  },
-  getString(key, defaultVal = '') {
-    try {
-      return localStorage.getItem(key) || defaultVal;
-    } catch {
-      return defaultVal;
-    }
-  },
-  setString(key, val) {
-    try {
-      localStorage.setItem(key, val);
-    } catch {}
-  }
+const DATA_SOURCES = {
+  tapmadEvents: 'https://gist.githubusercontent.com/albatr0ssss/3cff7a26be49b1d352c15f615067e7cd/raw/tapmad_bd.json',
+  primeEvents: 'https://raw.githubusercontent.com/srhady/willow-event/refs/heads/main/primevideo_sports.m3u',
+  fastTv: 'https://raw.githubusercontent.com/ahan443/FAST-IPTV/refs/heads/main/z.m3u',
+  nafiTv: 'https://raw.githubusercontent.com/nafitv24-web/NAFI-TV/refs/heads/main/Update%20Channel.m3u'
 };
 
 function escHtml(str) {
-  return String(str || '')
+  if (!str) return '';
+  return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-// ═══════════════════════════════════════════
-// 3. MAIN APPLICATION STATE
-// ═══════════════════════════════════════════
 const APP = {
+  // ── Global State ──
   S: {
-    activeTab: 'livetv', // 'livetv' | 'movies' | 'sports' | 'playlists' | 'schedule'
-    channels: [...BUILT_IN_CHANNELS],
-    movies: [],
-    sports: [],
-    playlists: [],
-    matches: [],
-    customPlaylists: Store.get('custom_playlists', []),
-    fav: Store.get('fav_channels', []),
-    rec: Store.get('rec_channels', []),
+    activeTab: 'events', // 'events' | 'livetv' | 'download'
+    events: [],
+    channels: [],
+    eventFilter: 'all', // 'all' | 'live' | 'prime' | 'tapmad' | 'cricket' | 'football' | 'upcoming'
+    tvSourceFilter: 'all', // 'all' | 'fasttv' | 'nafitv'
     tvCatFilter: '',
-    movieCatFilter: '',
-    sportsFilter: 'all',
-    scheduleFilter: 'all',
-    view: Store.getString('channel_view', 'g3'),
-    dark: Store.getString('theme_mode', 'dark') !== 'light',
-    autoplay: Store.getString('autoplay', 'true') !== 'false',
-    fsz: Store.getString('font_size', 'md'),
-    rtdbUrl: Store.getString('rtdb_url', DEFAULT_RTDB_URL),
-    gridPage: 1,
-    PAGE_SIZE: 36,
+    tvSearchQuery: '',
+    tvViewMode: 'g3', // 'lst' | 'g2' | 'g3'
+    visibleTvCount: 60,
     curItem: null,
     currentServerIdx: 0,
-    isLocked: false
+    favorites: new Set(),
+    recents: [],
+    theme: 'dark',
+    autoplay: true,
+    fontSize: 'md'
   },
 
+  // ── DOM Cache ──
   E: {},
 
-  init() {
+  // ── Video Players ──
+  hlsInstance: null,
+  shakaPlayer: null,
+
+  // ═══════════════════════════════════════════
+  // 1. INITIALIZATION & LIFECYCLE
+  // ═══════════════════════════════════════════
+  async init() {
     this.cacheElements();
-    this.applyTheme();
-    this.applyView(this.S.view);
-    this.applyFsz(this.S.fsz);
-
-    // Initial Renders
-    this.renderAllViews();
-
-    // Fetch all Firebase Data & Admin Playlists
-    this.fetchAllData();
-
-    // Bind event listeners
+    this.loadPreferences();
     this.bindEvents();
+    this.initPlayerControls();
 
-    // Hide loader
-    setTimeout(() => {
-      const ls = document.getElementById('ls');
-      if (ls) {
-        ls.classList.add('out');
-        setTimeout(() => { ls.style.display = 'none'; }, 500);
-      }
-    }, 600);
+    // Start data load immediately in parallel
+    await this.fetchAllData();
+
+    // Remove loading overlay
+    const ls = document.getElementById('ls');
+    if (ls) {
+      ls.classList.add('out');
+      setTimeout(() => { ls.style.display = 'none'; }, 500);
+    }
   },
 
   cacheElements() {
     const ids = [
-      'nav', 'menu', 'menu-ov', 'mo-btn', 'mc-btn',
-      'srch-ov', 'srch-btn', 'srch-close', 'srch-in', 'srch-res',
-      'set-ov', 'settings', 'set-btn', 'tog-theme', 'tog-auto',
-      'contact-ov', 'contact-sheet',
-      'import-ov', 'btn-close-import', 'btn-do-import',
-      'import-url-input', 'import-file-input',
-      'player-wrap', 'main-video', 'qtv-lock-btn', 'qtv-close-btn',
-      'pw-bar', 'pw-logo', 'pw-name', 'pw-category', 'pw-server-select',
-      'video-loader', 'video-error', 'player-err-msg',
-      'btn-player-retry', 'btn-player-next-server',
-      'notice', 'notice-txt',
-      'grid', 'grid-more-wrap', 'grid-more-btn', 'cat-tabs',
-      'movies-grid', 'movies-more-wrap', 'movies-more-btn', 'movie-cat-tabs', 'movie-search-in',
-      'sports-grid', 'playlists-grid', 'match-list',
-      'badge-tv-count', 'badge-movies-count', 'badge-sports-count', 'badge-playlists-count',
-      'tv-total-count', 'movies-total-count', 'sports-total-count', 'playlists-total-count',
-      'setting-rtdb-url', 'btn-save-rtdb'
+      'view-events', 'view-livetv', 'view-download',
+      'tab-btn-events', 'tab-btn-livetv', 'tab-btn-download',
+      'bnav-events', 'bnav-livetv', 'bnav-download',
+      'm-events', 'm-livetv', 'm-download',
+      'm-fav', 'm-rec', 'm-settings', 'm-contact',
+      'badge-events-count', 'badge-tv-count',
+      'events-total-count', 'tv-total-count',
+      'events-grid', 'events-filters',
+      'grid', 'cat-tabs', 'tv-source-tabs', 'grid-more-wrap', 'grid-more-btn',
+      'player-wrap', 'main-video', 'vctrl-big-play', 'video-loader', 'video-error',
+      'pw-name', 'pw-category', 'pw-logo', 'pw-server-select', 'pw-close',
+      'vctrl-play', 'vctrl-prog', 'vctrl-prog-fill', 'vctrl-time',
+      'vctrl-mute', 'vctrl-vol', 'vctrl-pip', 'vctrl-full',
+      'menu-btn', 'menu-ov', 'menu', 'mc-btn',
+      'srch-btn', 'srch-ov', 'srch-close', 'srch-in', 'srch-res',
+      'set-ov', 'settings', 'tog-theme', 'tog-auto',
+      'contact-ov', 'contact-sheet', 'cs-btn',
+      'vb-lst', 'vb-g2', 'vb-g3', 'upc-track-home'
     ];
+
     ids.forEach(id => {
       this.E[id] = document.getElementById(id);
     });
-
-    if (this.E['setting-rtdb-url']) {
-      this.E['setting-rtdb-url'].value = this.S.rtdbUrl;
-    }
   },
 
-  // ═══════════════════════════════════════════
-  // 4. FETCHING & PARSING ALL FIREBASE DATA
-  // ═══════════════════════════════════════════
-  async fetchAllData() {
-    const rtdbBase = this.S.rtdbUrl.replace(/\/+$/, '');
-
-    // Fetch endpoints in parallel
-    const endpoints = [
-      `${rtdbBase}/app_config.json`,
-      `${rtdbBase}/channels.json`,
-      `${rtdbBase}/movies.json`,
-      `${rtdbBase}/sports.json`,
-      `${rtdbBase}/matches.json`,
-      `${rtdbBase}/events.json`,
-      `${rtdbBase}/playlists.json`,
-      `${rtdbBase}/marquee_news.json`
-    ];
-
-    const [
-      fbAppConfig,
-      fbChannels,
-      fbMovies,
-      fbSports,
-      fbMatches,
-      fbEvents,
-      fbPlaylists,
-      fbMarqueeNews
-    ] = await Promise.all(
-      endpoints.map(url =>
-        fetch(url, { cache: 'no-store' })
-          .then(res => res.ok ? res.json() : null)
-          .catch(() => null)
-      )
-    );
-
-    // 1. Marquee News
-    if (fbMarqueeNews && fbMarqueeNews.marquee_ticker) {
-      if (this.E['notice-txt']) {
-        this.E['notice-txt'].textContent = fbMarqueeNews.marquee_ticker;
-      }
-    }
-
-    const newChannels = [];
-    const newMovies = [];
-    const newSports = [];
-    const newPlaylists = [];
-    const newMatches = [];
-
-    // 2. Process Firebase RTDB /channels.json
-    if (fbChannels && typeof fbChannels === 'object') {
-      this.normalizeItems(fbChannels, 'Bangla TV').forEach(ch => newChannels.push(ch));
-    }
-
-    // 3. Process Firebase RTDB /movies.json
-    if (fbMovies && typeof fbMovies === 'object') {
-      this.normalizeMovies(fbMovies).forEach(m => newMovies.push(m));
-    }
-
-    // 4. Process Firebase RTDB /sports.json
-    if (fbSports && typeof fbSports === 'object') {
-      this.normalizeSports(fbSports).forEach(sp => {
-        newSports.push(sp);
-        newMatches.push(this.sportToMatch(sp));
-      });
-    }
-
-    // 5. Process Firebase RTDB /matches.json & /events.json
-    if (fbMatches && typeof fbMatches === 'object') {
-      this.normalizeMatches(fbMatches).forEach(m => {
-        newMatches.push(m);
-        if (m.streamUrl) newSports.push(this.matchToSport(m));
-      });
-    }
-    if (fbEvents && typeof fbEvents === 'object') {
-      this.normalizeMatches(fbEvents).forEach(m => {
-        newMatches.push(m);
-        if (m.streamUrl) newSports.push(this.matchToSport(m));
-      });
-    }
-
-    // 6. Process Firebase RTDB /playlists.json
-    if (fbPlaylists && typeof fbPlaylists === 'object') {
-      const plArray = Array.isArray(fbPlaylists)
-        ? fbPlaylists
-        : Object.entries(fbPlaylists).map(([id, p]) => ({ id, ...p }));
-
-      for (const pl of plArray) {
-        if (pl && (pl.url || pl.serverUrl)) {
-          const plUrl = pl.url || pl.serverUrl;
-          const plName = pl.name || pl.title || 'Playlist';
-          const plItem = {
-            id: pl.id || 'pl_' + Math.random().toString(36).substring(2, 8),
-            name: plName,
-            description: pl.description || 'NAFI TV Cloud Synced Playlist',
-            logo: pl.logo || pl.logoUrl || FALLBACK_LOGO_SVG,
-            url: plUrl,
-            type: pl.type || (plUrl.includes('.json') ? 'JSON' : 'M3U'),
-            channelCount: pl.channelCount || 0,
-            items: []
-          };
-          newPlaylists.push(plItem);
-        }
-      }
-    }
-
-    // 7. Process Central app_config URLs (Live TV M3U, Movies M3U/JSON, Sports M3U/JSON)
-    if (fbAppConfig && typeof fbAppConfig === 'object') {
-      // (a) Live TV M3U URLs (newline separated)
-      if (fbAppConfig.liveTvM3uUrl || fbAppConfig.liveTvM3u) {
-        const liveTvUrls = this.splitUrls(fbAppConfig.liveTvM3uUrl || fbAppConfig.liveTvM3u);
-        for (const url of liveTvUrls) {
-          const plItem = {
-            id: 'cfg_tv_' + Math.random().toString(36).substring(2, 8),
-            name: this.extractPlaylistName(url, 'Live TV M3U'),
-            description: 'অ্যাডমিন প্যানেল থেকে কনফিগার করা লাইভ টিভি',
-            logo: FALLBACK_LOGO_SVG,
-            url: url,
-            type: url.includes('.json') ? 'JSON' : 'M3U',
-            channelCount: 0,
-            items: []
-          };
-          newPlaylists.push(plItem);
-        }
-      }
-
-      // (b) Movies M3U/JSON URLs (newline separated)
-      if (fbAppConfig.moviesM3uUrl || fbAppConfig.moviesM3u) {
-        const movieUrls = this.splitUrls(fbAppConfig.moviesM3uUrl || fbAppConfig.moviesM3u);
-        for (const url of movieUrls) {
-          const plItem = {
-            id: 'cfg_mov_' + Math.random().toString(36).substring(2, 8),
-            name: this.extractPlaylistName(url, 'Movies Collection'),
-            description: 'মুভি ও ওয়েব সিরিজ কালেকশন',
-            logo: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=200&fit=crop',
-            url: url,
-            type: url.includes('.json') ? 'JSON' : 'M3U',
-            channelCount: 0,
-            items: []
-          };
-          newPlaylists.push(plItem);
-        }
-      }
-
-      // (c) Sports M3U/JSON URLs (newline separated)
-      if (fbAppConfig.sportsM3uUrl || fbAppConfig.sportsM3u) {
-        const sportsUrls = this.splitUrls(fbAppConfig.sportsM3uUrl || fbAppConfig.sportsM3u);
-        for (const url of sportsUrls) {
-          const plItem = {
-            id: 'cfg_sp_' + Math.random().toString(36).substring(2, 8),
-            name: this.extractPlaylistName(url, 'Live Sports M3U'),
-            description: 'লাইভ স্পোর্টস ও ম্যাচ কালেকশন',
-            logo: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=200&fit=crop',
-            url: url,
-            type: url.includes('.json') ? 'JSON' : 'M3U',
-            channelCount: 0,
-            items: []
-          };
-          newPlaylists.push(plItem);
-        }
-      }
-
-      // (d) Tapmad Sports JSON URL
-      if (fbAppConfig.tapmadJsonUrl) {
-        const plItem = {
-          id: 'cfg_tapmad',
-          name: 'Tapmad BD Sports',
-          description: 'ট্যাপম্যাড স্পোর্টস লাইভ স্ট্রিমস ও ম্যাচ',
-          logo: 'https://flagcdn.com/w160/bd.png',
-          url: fbAppConfig.tapmadJsonUrl,
-          type: 'JSON',
-          channelCount: 0,
-          items: []
-        };
-        newPlaylists.push(plItem);
-      }
-    }
-
-    // 8. Custom saved playlists from localStorage
-    if (this.S.customPlaylists && this.S.customPlaylists.length > 0) {
-      for (const pl of this.S.customPlaylists) {
-        if (pl.url) {
-          const plItem = {
-            id: 'custom_' + Math.random().toString(36).substring(2, 8),
-            name: pl.name || 'Custom Playlist',
-            description: 'ইউজার কর্তৃক যোগ করা কাস্টম প্লেলিস্ট',
-            logo: FALLBACK_LOGO_SVG,
-            url: pl.url,
-            type: pl.url.includes('.json') ? 'JSON' : 'M3U',
-            channelCount: 0,
-            items: []
-          };
-          newPlaylists.push(plItem);
-        }
-      }
-    }
-
-    // Deduplicate Channels
-    const mergedChannels = [...newChannels, ...BUILT_IN_CHANNELS];
-    const uniqueChannels = [];
-    const seenCh = new Set();
-    mergedChannels.forEach(c => {
-      if (c && c.url && !seenCh.has(c.name.toLowerCase().trim())) {
-        seenCh.add(c.name.toLowerCase().trim());
-        uniqueChannels.push(c);
-      }
-    });
-
-    // Deduplicate Movies
-    const uniqueMovies = [];
-    const seenMov = new Set();
-    newMovies.forEach(m => {
-      const key = (m.title || m.name || '').toLowerCase().trim();
-      if (key && !seenMov.has(key)) {
-        seenMov.add(key);
-        uniqueMovies.push(m);
-      }
-    });
-
-    // Deduplicate Sports
-    const uniqueSports = [];
-    const seenSp = new Set();
-    newSports.forEach(s => {
-      const key = (s.title || s.name || '').toLowerCase().trim();
-      if (key && !seenSp.has(key)) {
-        seenSp.add(key);
-        uniqueSports.push(s);
-      }
-    });
-
-    // Deduplicate Playlists
-    const uniquePlaylists = [];
-    const seenPl = new Set();
-    newPlaylists.forEach(p => {
-      if (p.url && !seenPl.has(p.url)) {
-        seenPl.add(p.url);
-        uniquePlaylists.push(p);
-      }
-    });
-
-    // Assign to state instantly - UI is rendered immediately!
-    this.S.channels = uniqueChannels;
-    this.S.movies = uniqueMovies;
-    this.S.sports = uniqueSports;
-    this.S.playlists = uniquePlaylists;
-    this.S.matches = newMatches;
-
-    // Update Counts & render all views
-    this.updateBadges();
-    this.renderAllViews();
-    this.renderUpcomingCarousel();
-
-    // Background fetch: load popular playlists asynchronously without blocking the UI
-    setTimeout(() => {
-      this.backgroundLoadTopPlaylists();
-    }, 100);
-  },
-
-  // Background playlist loader for top 3 popular playlists
-  async backgroundLoadTopPlaylists() {
-    const topPlaylists = this.S.playlists.slice(0, 4);
-    for (const pl of topPlaylists) {
-      if (pl.items && pl.items.length > 0) continue;
-      try {
-        const text = await this.fetchWithFallback(pl.url);
-        if (text) {
-          const items = this.parsePlaylistText(text, pl.name || 'Live TV');
-          if (items && items.length > 0) {
-            pl.items = items;
-            pl.channelCount = items.length;
-            items.forEach(it => {
-              if (!this.S.channels.some(c => c.url === it.url)) {
-                this.S.channels.push(it);
-              }
-            });
-            this.updateBadges();
-            this.renderPlaylists();
-          }
-        }
-      } catch (err) {
-        console.warn('Background playlist load error:', pl.name, err);
-      }
-    }
-  },
-
-  splitUrls(raw) {
-    if (!raw || typeof raw !== 'string') return [];
-    return raw
-      .split(/[\r\n,]+/)
-      .map(u => u.trim())
-      .filter(u => u.startsWith('http://') || u.startsWith('https://'));
-  },
-
-  extractPlaylistName(url, fallback) {
+  loadPreferences() {
     try {
-      const decoded = decodeURIComponent(url);
-      const parts = decoded.split('/');
-      const last = parts[parts.length - 1];
-      if (last && last.length > 3) {
-        return last.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-      }
-    } catch {}
-    return fallback;
+      const favs = localStorage.getItem('nafitv_favs');
+      if (favs) this.S.favorites = new Set(JSON.parse(favs));
+    } catch (e) {}
+
+    try {
+      const recs = localStorage.getItem('nafitv_recents');
+      if (recs) this.S.recents = JSON.parse(recs);
+    } catch (e) {}
+
+    const theme = localStorage.getItem('nafitv_theme') || 'dark';
+    this.S.theme = theme;
+    if (theme === 'light') document.body.classList.add('lt');
+
+    const fs = localStorage.getItem('nafitv_fs') || 'md';
+    this.S.fontSize = fs;
+    if (fs === 'sm') document.body.classList.add('fs-sm');
+    if (fs === 'lg') document.body.classList.add('fs-lg');
   },
 
   // ═══════════════════════════════════════════
-  // 5. UNIVERSAL PLAYLIST & JSON ENGINE
+  // 2. PARALLEL DATA FETCHING (NO FIREBASE)
   // ═══════════════════════════════════════════
   async fetchWithFallback(url) {
     if (!url || typeof url !== 'string') return null;
     const cleanUrl = url.trim();
 
-    // 1. Direct fetch with 6 second timeout
+    // 1. Direct fetch
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6000);
+      const timer = setTimeout(() => controller.abort(), 7000);
       const res = await fetch(cleanUrl, { signal: controller.signal, cache: 'no-store' });
       clearTimeout(timer);
-      if (res.ok) {
-        return await res.text();
-      }
-    } catch (e) {
-      // direct fetch failed (CORS or network)
-    }
+      if (res.ok) return await res.text();
+    } catch (e) {}
 
-    // 2. CORS Proxy Fallback (AllOrigins)
+    // 2. CORS Proxy Fallback 1: corsproxy.io
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 7000);
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}`;
-      const res = await fetch(proxyUrl, { signal: controller.signal });
-      clearTimeout(timer);
-      if (res.ok) {
-        return await res.text();
-      }
-    } catch (e) {
-      // proxy 1 failed
-    }
-
-    // 3. CORS Proxy Fallback (corsproxy.io)
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 7000);
+      const timer = setTimeout(() => controller.abort(), 8000);
       const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(cleanUrl)}`;
       const res = await fetch(proxyUrl, { signal: controller.signal });
       clearTimeout(timer);
-      if (res.ok) {
-        return await res.text();
-      }
+      if (res.ok) return await res.text();
+    } catch (e) {}
+
+    // 3. CORS Proxy Fallback 2: allorigins.win
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}`;
+      const res = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) return await res.text();
     } catch (e) {}
 
     return null;
   },
 
-  parsePlaylistText(text, defaultCategory = 'Live TV') {
-    if (!text || typeof text !== 'string') return [];
-    const trimmed = text.trim();
+  async fetchAllData() {
+    const results = await Promise.allSettled([
+      this.fetchWithFallback(DATA_SOURCES.primeEvents),
+      this.fetchWithFallback(DATA_SOURCES.tapmadEvents),
+      this.fetchWithFallback(DATA_SOURCES.fastTv),
+      this.fetchWithFallback(DATA_SOURCES.nafiTv)
+    ]);
+
+    const primeText = results[0].status === 'fulfilled' ? results[0].value : null;
+    const tapmadText = results[1].status === 'fulfilled' ? results[1].value : null;
+    const fastTvText = results[2].status === 'fulfilled' ? results[2].value : null;
+    const nafiTvText = results[3].status === 'fulfilled' ? results[3].value : null;
+
+    // 1. Parse Events
+    const primeEvents = this.parsePrimeSportsM3u(primeText);
+    const tapmadEvents = this.parseTapmadJson(tapmadText);
+    this.S.events = [...primeEvents, ...tapmadEvents];
+
+    // 2. Parse Channels
+    const fastChannels = this.parseFastTvM3u(fastTvText);
+    const nafiChannels = this.parseNafiTvData(nafiTvText);
+    this.S.channels = [...fastChannels, ...nafiChannels];
+
+    // 3. Update Badges
+    if (this.E['badge-events-count']) {
+      this.E['badge-events-count'].textContent = this.S.events.length;
+    }
+    if (this.E['badge-tv-count']) {
+      this.E['badge-tv-count'].textContent = this.S.channels.length;
+    }
+
+    // 4. Render Active Views
+    this.renderEvents();
+    this.buildTvCategoryTabs();
+    this.renderTvChannels();
+    this.renderUpcomingCarousel();
+  },
+
+  // ═══════════════════════════════════════════
+  // 3. PARSERS FOR THE 4 SPECIFIC ENDPOINTS
+  // ═══════════════════════════════════════════
+
+  // (A) Prime Video Sports M3U (DASH / MPD with ClearKey)
+  parsePrimeSportsM3u(text) {
+    if (!text) return [];
     const items = [];
+    const lines = text.split(/\r?\n/);
+    let curTitle = '';
+    let curLogo = '';
+    let curCat = 'Prime Sports';
+    let curDrmKey = '';
 
-    // CASE A: JSON (Categories, Movies, Tapmad, or Footy Live)
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-      try {
-        const json = JSON.parse(trimmed);
-
-        // 1. Category-based JSON ({ categories: [...] })
-        if (json.categories && Array.isArray(json.categories)) {
-          json.categories.forEach(catObj => {
-            const catName = catObj.category_name || defaultCategory;
-            const subItems = catObj.movies || catObj.channels || [];
-            subItems.forEach(it => {
-              const title = it.title || it.name || 'Channel';
-              const poster = it.poster || it.logo || it.icon || '';
-              const servers = (it.sources || it.servers || []).map(s => ({
-                name: s.server_name || s.name || 'Server',
-                url: s.url || s.streamUrl
-              })).filter(s => s.url);
-              const primaryUrl = (servers[0] ? servers[0].url : '') || it.url || it.streamUrl;
-              if (primaryUrl) {
-                items.push({
-                  id: 'json_ch_' + Math.random().toString(36).substring(2, 8),
-                  name: title,
-                  category: catName,
-                  logo: poster,
-                  poster: poster,
-                  url: primaryUrl,
-                  servers: servers.length > 0 ? servers : [{ name: 'সার্ভার ১', url: primaryUrl }],
-                  isLive: true
-                });
-              }
-            });
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('#EXTINF:')) {
+        const logoMatch = line.match(/tvg-logo="([^"]+)"/i);
+        curLogo = logoMatch ? logoMatch[1] : '';
+        const groupMatch = line.match(/group-title="([^"]+)"/i);
+        curCat = groupMatch ? groupMatch[1] : 'Prime Sports';
+        const commaIdx = line.lastIndexOf(',');
+        curTitle = commaIdx !== -1 ? line.substring(commaIdx + 1).trim() : 'Prime Sports Event';
+      } else if (line.includes('license_key=')) {
+        curDrmKey = line.split('license_key=')[1].trim();
+      } else if (line.startsWith('http://') || line.startsWith('https://')) {
+        if (curTitle && line) {
+          items.push({
+            id: 'prime_' + Math.random().toString(36).substring(2, 8),
+            title: curTitle,
+            category: curCat,
+            tournament: 'Prime Video Sports Live',
+            logo: curLogo || FALLBACK_LOGO_SVG,
+            poster: curLogo || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=500&fit=crop',
+            url: line,
+            drmKey: curDrmKey,
+            manifestType: 'mpd',
+            source: 'prime',
+            isLive: true,
+            time: 'LIVE NOW',
+            servers: [{ name: 'Prime HD Stream (ClearKey)', url: line, drmKey: curDrmKey }]
           });
         }
-        // 2. Tapmad Sports Matches JSON ({ Matches: [...] })
-        else if (json.Matches && Array.isArray(json.Matches)) {
-          json.Matches.forEach(tMatch => {
-            const title = tMatch.VideoName || 'Live Sports';
-            const sUrl = tMatch.stream_url || '';
-            if (sUrl) {
-              items.push({
-                id: 'tapmad_' + (tMatch.EntityId || Math.random().toString(36).substring(2, 7)),
-                name: title,
-                category: tMatch.CategoryName || 'Sports',
-                logo: tMatch.ThumbnailStandard || '',
-                url: sUrl,
-                servers: [{ name: 'Tapmad Live', url: sUrl }],
-                isLive: String(tMatch.Status).toLowerCase() === 'live'
-              });
-            }
-          });
-        }
-        // 3. Footy Live Matches ({ matches: [...] })
-        else if (json.matches && Array.isArray(json.matches)) {
-          json.matches.forEach(m => {
-            const mName = m['match name'] || m.title || 'Live Match';
-            const channels = m.Channels || [];
-            const servers = channels.map(c => ({
-              name: c.channel_name || 'Server',
-              url: c.url
-            })).filter(s => s.url);
-            const sUrl = servers[0] ? servers[0].url : (m.streamUrl || '');
-            if (sUrl) {
-              items.push({
-                id: 'ft_' + Math.random().toString(36).substring(2, 8),
-                name: mName,
-                category: m.Category || 'Football',
-                logo: m['Team 1 Logo'] || '',
-                url: sUrl,
-                servers: servers.length > 0 ? servers : [{ name: 'Server 1', url: sUrl }],
-                isLive: String(m.Status).toLowerCase() === 'live'
-              });
-            }
-          });
-        }
-        // 4. Standard Array of Items ([ { name, url, logo, category } ])
-        else if (Array.isArray(json)) {
-          json.forEach(it => {
-            const sUrl = it.url || it.streamUrl || (it.servers && it.servers[0] ? it.servers[0].url : '');
-            if (sUrl) {
-              items.push({
-                id: 'arr_ch_' + Math.random().toString(36).substring(2, 8),
-                name: it.name || it.title || 'Channel',
-                category: it.category || defaultCategory,
-                logo: it.logo || it.icon || it.poster || '',
-                url: sUrl,
-                servers: it.servers || [{ name: 'সার্ভার ১', url: sUrl }],
-                isLive: it.isLive !== false
-              });
-            }
-          });
-        }
-        return items;
-      } catch (jsonErr) {
-        console.warn('JSON parse error in parsePlaylistText:', jsonErr);
+        curTitle = '';
+        curLogo = '';
+        curCat = 'Prime Sports';
+        curDrmKey = '';
       }
     }
-
-    // CASE B: Standard M3U / M3U8 Playlist
-    if (trimmed.includes('#EXTM3U') || trimmed.includes('#EXTINF') || trimmed.includes('http')) {
-      const lines = trimmed.split(/\r?\n/);
-      let curName = '';
-      let curLogo = '';
-      let curCat = defaultCategory;
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line.startsWith('#EXTINF:')) {
-          const logoMatch = line.match(/tvg-logo="([^"]+)"/i);
-          curLogo = logoMatch ? logoMatch[1] : '';
-
-          const groupMatch = line.match(/group-title="([^"]+)"/i);
-          curCat = groupMatch ? groupMatch[1] : defaultCategory;
-
-          const commaIdx = line.lastIndexOf(',');
-          curName = commaIdx !== -1 ? line.substring(commaIdx + 1).trim() : 'Channel';
-        } else if (line.startsWith('http://') || line.startsWith('https://')) {
-          if (curName && line) {
-            items.push({
-              id: 'm3u_' + Math.random().toString(36).substring(2, 8),
-              name: curName,
-              category: curCat,
-              logo: curLogo,
-              url: line,
-              servers: [{ name: 'সার্ভার ১', url: line }],
-              isLive: true
-            });
-          }
-          curName = '';
-          curLogo = '';
-          curCat = defaultCategory;
-        }
-      }
-    }
-
     return items;
   },
 
-  // ═══════════════════════════════════════════
-  // 6. PLAYLIST CHANNELS VIEWER MODAL
-  // ═══════════════════════════════════════════
-  async openPlaylistViewer(pl) {
-    if (!pl) return;
-    const modal = document.getElementById('pl-viewer-ov');
-    const titleEl = document.getElementById('pl-viewer-title');
-    const logoEl = document.getElementById('pl-viewer-logo');
-    const countEl = document.getElementById('pl-viewer-count');
-    const searchInput = document.getElementById('pl-viewer-search');
-    const loader = document.getElementById('pl-viewer-loader');
-    const emptyEl = document.getElementById('pl-viewer-empty');
-    const grid = document.getElementById('pl-viewer-grid');
+  // (B) Tapmad BD Events JSON
+  parseTapmadJson(text) {
+    if (!text) return [];
+    const items = [];
+    try {
+      const data = JSON.parse(text);
+      const matches = data.Matches || (Array.isArray(data) ? data : []);
 
-    if (!modal) return;
-    modal.style.display = 'flex';
-    this.S.activeViewerPlaylist = pl;
-    this.S.viewerPage = 1;
+      matches.forEach(m => {
+        const title = m.VideoName || m.title || 'Tapmad Sports Match';
+        const cat = m.CategoryName || 'Sports';
+        const status = String(m.Status || '').toLowerCase();
+        const isLive = status === 'live' || status === '1';
+        const dateStr = m.EventStartDate || '';
+        const thumb = m.ThumbnailStandard || m.ThumbnailTV || m.poster || 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=500&fit=crop';
+        const streamUrl = m.stream_url || (m.sources && m.sources[0] ? m.sources[0].url : '') || '';
 
-    if (titleEl) titleEl.textContent = pl.name || 'Playlist';
-    if (logoEl) logoEl.src = pl.logo || FALLBACK_LOGO_SVG;
-    if (searchInput) searchInput.value = '';
+        // Formatted display date/time
+        let displayTime = isLive ? 'LIVE NOW' : 'আসন্ন ম্যাচ';
+        if (dateStr && !isLive) {
+          try {
+            const d = new Date(dateStr.replace(' ', 'T'));
+            if (!isNaN(d.getTime())) {
+              displayTime = d.toLocaleDateString('bn-BD', { month: 'short', day: 'numeric' }) + ' ' +
+                            d.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+            } else {
+              displayTime = dateStr;
+            }
+          } catch (e) {
+            displayTime = dateStr;
+          }
+        }
 
-    // If channels already cached in pl.items
-    if (pl.items && pl.items.length > 0) {
-      if (loader) loader.style.display = 'none';
-      if (emptyEl) emptyEl.style.display = 'none';
-      if (countEl) countEl.textContent = `${pl.items.length} টি চ্যানেল`;
-      this.renderViewerChannels(pl.items, '');
-      return;
+        items.push({
+          id: 'tapmad_' + (m.EntityId || Math.random().toString(36).substring(2, 7)),
+          title: title,
+          category: cat,
+          tournament: cat,
+          logo: thumb,
+          poster: thumb,
+          url: streamUrl,
+          urlSlug: m.UrlSlug || '',
+          source: 'tapmad',
+          isLive: isLive,
+          time: displayTime,
+          description: m.Description || '',
+          servers: streamUrl
+            ? [{ name: 'Tapmad Live Stream', url: streamUrl }]
+            : [
+                { name: 'সার্ভার ১ (T Sports)', url: 'https://box.bbaria.net:8083/T_Sports/video.m3u8' },
+                { name: 'সার্ভার ২ (Sports HD)', url: 'https://d3bq19vx8xhpwy.cloudfront.net/live/myStream/playlist.m3u8' }
+              ]
+        });
+      });
+    } catch (e) {
+      console.warn('Error parsing Tapmad JSON:', e);
     }
+    return items;
+  },
 
-    // Otherwise, fetch on demand without blocking or freezing
-    if (loader) loader.style.display = 'flex';
-    if (emptyEl) emptyEl.style.display = 'none';
-    if (grid) grid.innerHTML = '';
-    if (countEl) countEl.textContent = 'চ্যানেল লোড হচ্ছে...';
+  // (C) FAST TV M3U (155 channels)
+  parseFastTvM3u(text) {
+    if (!text) return [];
+    const items = [];
+    const lines = text.split(/\r?\n/);
+    let curTitle = '';
+    let curLogo = '';
+    let curCat = 'FAST TV';
 
-    const text = await this.fetchWithFallback(pl.url);
-    if (loader) loader.style.display = 'none';
-
-    if (!text) {
-      if (emptyEl) emptyEl.style.display = 'flex';
-      if (countEl) countEl.textContent = 'লোড করতে ব্যর্থ হয়েছে';
-      return;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('#EXTINF:')) {
+        const logoMatch = line.match(/tvg-logo="([^"]+)"/i);
+        curLogo = logoMatch ? logoMatch[1] : '';
+        const groupMatch = line.match(/group-title="([^"]+)"/i);
+        curCat = groupMatch ? groupMatch[1] : 'FAST TV';
+        const commaIdx = line.lastIndexOf(',');
+        curTitle = commaIdx !== -1 ? line.substring(commaIdx + 1).trim() : 'FAST Channel';
+      } else if (line.startsWith('http://') || line.startsWith('https://')) {
+        if (curTitle && line) {
+          items.push({
+            id: 'fast_' + Math.random().toString(36).substring(2, 8),
+            name: curTitle,
+            title: curTitle,
+            category: this.normalizeCategoryName(curCat),
+            rawCategory: curCat,
+            logo: curLogo || FALLBACK_LOGO_SVG,
+            url: line,
+            source: 'fasttv',
+            servers: [{ name: 'FAST HD (BDIX)', url: line }]
+          });
+        }
+        curTitle = '';
+        curLogo = '';
+        curCat = 'FAST TV';
+      }
     }
+    return items;
+  },
 
-    const items = this.parsePlaylistText(text, pl.name || 'Channel');
-    pl.items = items;
-    pl.channelCount = items.length;
+  // (D) NAFI TV24 Categorized Multi-Server JSON (386 channels)
+  parseNafiTvData(text) {
+    if (!text) return [];
+    const items = [];
+    try {
+      const data = JSON.parse(text);
+      const categories = data.categories || [];
 
-    // Also enrich global channels collection
-    items.forEach(it => {
-      if (!this.S.channels.some(c => c.url === it.url)) {
-        this.S.channels.push(it);
+      categories.forEach(catObj => {
+        const catName = catObj.category_name || 'General';
+        const normCat = this.normalizeCategoryName(catName);
+        const channels = catObj.movies || catObj.channels || [];
+
+        channels.forEach(ch => {
+          const title = ch.title || ch.name || 'NAFI Channel';
+          const poster = ch.poster || ch.logo || ch.icon || FALLBACK_LOGO_SVG;
+          const sources = (ch.sources || ch.servers || []).map((s, idx) => ({
+            name: s.server_name || `সার্ভার ${idx + 1}`,
+            url: s.url || s.streamUrl
+          })).filter(s => s.url);
+
+          const primaryUrl = (sources[0] ? sources[0].url : '') || ch.url || ch.streamUrl || '';
+          if (primaryUrl) {
+            items.push({
+              id: 'nafi_' + Math.random().toString(36).substring(2, 8),
+              name: title,
+              title: title,
+              category: normCat,
+              rawCategory: catName,
+              logo: poster,
+              poster: poster,
+              url: primaryUrl,
+              source: 'nafitv',
+              servers: sources.length > 0 ? sources : [{ name: 'সার্ভার ১ (HD)', url: primaryUrl }]
+            });
+          }
+        });
+      });
+    } catch (e) {
+      console.warn('Error parsing NAFI TV JSON:', e);
+    }
+    return items;
+  },
+
+  normalizeCategoryName(raw) {
+    if (!raw) return 'অন্যান্য';
+    const s = raw.toLowerCase().trim();
+    if (s.includes('bangla') || s.includes('bd') || s.includes('local')) return 'বাংলাদেশী';
+    if (s.includes('sport') || s.includes('cricket') || s.includes('football')) return 'খেলাধুলা';
+    if (s.includes('movie') || s.includes('cinema') || s.includes('film')) return 'মুভি';
+    if (s.includes('news') || s.includes('khabor')) return 'সংবাদ';
+    if (s.includes('entertain') || s.includes('natok') || s.includes('serial')) return 'বিনোদন';
+    if (s.includes('kid') || s.includes('cartoon')) return 'কিডস';
+    if (s.includes('islam') || s.includes('quran') || s.includes('deen')) return 'ইসলামিক';
+    if (s.includes('music') || s.includes('song')) return 'মিউজিক';
+    if (s.includes('pakistan') || s.includes('india') || s.includes('hindi')) return 'আন্তর্জাতিক';
+    return raw;
+  },
+
+  // ═══════════════════════════════════════════
+  // 4. TAB NAVIGATION & VIEW SWITCHING (3 OPTIONS)
+  // ═══════════════════════════════════════════
+  switchTab(tab) {
+    if (!['events', 'livetv', 'download'].includes(tab)) return;
+    this.S.activeTab = tab;
+
+    // 1. Toggle View Sections
+    const views = {
+      events: this.E['view-events'],
+      livetv: this.E['view-livetv'],
+      download: this.E['view-download']
+    };
+
+    Object.entries(views).forEach(([key, el]) => {
+      if (el) {
+        if (key === tab) {
+          el.style.display = 'block';
+          el.classList.add('active');
+        } else {
+          el.style.display = 'none';
+          el.classList.remove('active');
+        }
       }
     });
-    this.updateBadges();
 
-    if (countEl) countEl.textContent = `${items.length} টি চ্যানেল`;
-    if (items.length === 0) {
-      if (emptyEl) emptyEl.style.display = 'flex';
-    } else {
-      if (emptyEl) emptyEl.style.display = 'none';
-      this.renderViewerChannels(items, '');
-    }
+    // 2. Toggle Main Top Tabs
+    const topTabBtns = {
+      events: this.E['tab-btn-events'],
+      livetv: this.E['tab-btn-livetv'],
+      download: this.E['tab-btn-download']
+    };
+    Object.entries(topTabBtns).forEach(([key, btn]) => {
+      if (btn) {
+        btn.classList.toggle('on', key === tab);
+        btn.setAttribute('aria-selected', key === tab ? 'true' : 'false');
+      }
+    });
+
+    // 3. Toggle Bottom Nav Buttons
+    const bnavBtns = {
+      events: this.E['bnav-events'],
+      livetv: this.E['bnav-livetv'],
+      download: this.E['bnav-download']
+    };
+    Object.entries(bnavBtns).forEach(([key, btn]) => {
+      if (btn) btn.classList.toggle('on', key === tab);
+    });
+
+    // 4. Toggle Side Drawer Menu Items
+    const menuItems = {
+      events: this.E['m-events'],
+      livetv: this.E['m-livetv'],
+      download: this.E['m-download']
+    };
+    Object.entries(menuItems).forEach(([key, item]) => {
+      if (item) item.classList.toggle('on', key === tab);
+    });
+
+    // Close menu drawer if open
+    this.closeMenu();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 
-  closePlaylistViewer() {
-    const modal = document.getElementById('pl-viewer-ov');
-    if (modal) modal.style.display = 'none';
-    this.S.activeViewerPlaylist = null;
-  },
-
-  renderViewerChannels(items, query = '') {
-    const grid = document.getElementById('pl-viewer-grid');
-    const emptyEl = document.getElementById('pl-viewer-empty');
-    const loadMoreBtn = document.getElementById('btn-pl-load-more');
+  // ═══════════════════════════════════════════
+  // 5. VIEW 1: LIVE EVENTS RENDERING
+  // ═══════════════════════════════════════════
+  renderEvents() {
+    const grid = this.E['events-grid'];
     if (!grid) return;
 
-    let filtered = items;
-    if (query) {
-      const q = query.toLowerCase();
-      filtered = items.filter(it =>
-        (it.name || '').toLowerCase().includes(q) ||
-        (it.category || '').toLowerCase().includes(q)
-      );
+    let list = [...this.S.events];
+
+    // Apply Filter
+    const f = this.S.eventFilter;
+    if (f === 'live') {
+      list = list.filter(e => e.isLive);
+    } else if (f === 'prime') {
+      list = list.filter(e => e.source === 'prime');
+    } else if (f === 'tapmad') {
+      list = list.filter(e => e.source === 'tapmad');
+    } else if (f === 'cricket') {
+      list = list.filter(e => (e.title + e.category).toLowerCase().includes('cricket'));
+    } else if (f === 'football') {
+      list = list.filter(e => (e.title + e.category).toLowerCase().includes('football'));
+    } else if (f === 'upcoming') {
+      list = list.filter(e => !e.isLive);
     }
 
-    if (filtered.length === 0) {
-      grid.innerHTML = '';
-      if (emptyEl) emptyEl.style.display = 'flex';
-      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+    // Update count
+    if (this.E['events-total-count']) {
+      this.E['events-total-count'].textContent = `${list.length} টি ইভেন্ট`;
+    }
+
+    if (list.length === 0) {
+      grid.innerHTML = `
+        <div class="events-loader-state">
+          <i class="fas fa-trophy" style="font-size: 2.2rem; color: var(--t3);"></i>
+          <p style="color: var(--t2); font-weight: 600;">কোনো ইভেন্ট বা ম্যাচ খুঁজে পাওয়া যায়নি।</p>
+        </div>
+      `;
       return;
     }
-    if (emptyEl) emptyEl.style.display = 'none';
 
-    const pageSize = 40;
-    const pageItems = filtered.slice(0, this.S.viewerPage * pageSize);
+    grid.innerHTML = list.map(ev => {
+      const isLive = ev.isLive;
+      const poster = ev.poster || ev.logo || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=500&fit=crop';
+      const sourceLabel = ev.source === 'prime' ? 'Prime Sports' : 'Tapmad BD';
+      const sourceColor = ev.source === 'prime' ? '#0284c7' : '#10b981';
 
-    grid.innerHTML = pageItems.map(it => {
-      const logo = it.logo || FALLBACK_LOGO_SVG;
       return `
-        <div class="pl-ch-card" data-url="${escHtml(it.url)}">
-          <img class="pl-ch-logo" src="${escHtml(logo)}" alt="${escHtml(it.name)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-          <div class="pl-ch-name" title="${escHtml(it.name)}">${escHtml(it.name)}</div>
-          <span class="pl-ch-cat">${escHtml(it.category || 'Live')}</span>
-          <button class="pl-ch-btn-play"><i class="fas fa-play"></i> প্লে করুন</button>
+        <div class="event-card" data-id="${escHtml(ev.id)}" role="listitem">
+          <div class="event-banner-wrap">
+            <img class="event-banner-img" src="${escHtml(poster)}" alt="${escHtml(ev.title)}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=500&fit=crop'" />
+            <div class="event-overlay-badge ${isLive ? 'badge-status-live' : 'badge-status-upcoming'}">
+              ${isLive ? '<i class="fas fa-circle" style="font-size: 8px;"></i> LIVE' : '<i class="far fa-clock"></i> UPCOMING'}
+            </div>
+            <div class="event-source-tag" style="border-color:${sourceColor}40;">
+              <span style="color:${sourceColor}; font-weight:800;">●</span> ${escHtml(sourceLabel)}
+            </div>
+          </div>
+
+          <div class="event-body">
+            <div class="event-category-title">
+              <i class="fas fa-medal"></i>
+              <span>${escHtml(ev.tournament || ev.category)}</span>
+            </div>
+
+            <div class="event-main-title" title="${escHtml(ev.title)}">
+              ${escHtml(ev.title)}
+            </div>
+
+            <div class="event-meta-row">
+              <span class="event-time-badge">
+                <i class="far fa-clock"></i> ${escHtml(ev.time)}
+              </span>
+              <span style="font-weight:700; color:var(--t3);">
+                ${ev.servers ? `${ev.servers.length} সার্ভার` : 'HD Stream'}
+              </span>
+            </div>
+
+            <div class="event-actions">
+              <button class="btn-event-play" data-id="${escHtml(ev.id)}">
+                <i class="fas fa-play"></i> <span>এখনই দেখুন</span>
+              </button>
+            </div>
+          </div>
         </div>
       `;
     }).join('');
 
-    if (loadMoreBtn) {
-      loadMoreBtn.style.display = pageItems.length < filtered.length ? 'block' : 'none';
-    }
-
-    grid.querySelectorAll('.pl-ch-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const u = card.dataset.url;
-        const target = items.find(x => x.url === u);
-        if (target) {
-          this.closePlaylistViewer();
-          this.playItem(target);
-        }
+    // Attach click listeners to cards and play buttons
+    grid.querySelectorAll('.event-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        const id = card.dataset.id;
+        const item = this.S.events.find(x => x.id === id);
+        if (item) this.playItem(item);
       });
     });
   },
 
-  normalizeItems(objOrArr, defaultCategory) {
-    const list = Array.isArray(objOrArr) ? objOrArr : Object.entries(objOrArr).map(([k, v]) => ({ id: k, ...v }));
-    return list.map(item => {
-      const servers = item.servers && Array.isArray(item.servers)
-        ? item.servers
-        : (item.streamUrl ? [{ name: 'সার্ভার ১', url: item.streamUrl }] : []);
-
-      if (item.backupUrl && !servers.some(s => s.url === item.backupUrl)) {
-        servers.push({ name: 'সার্ভার ২ (ব্যাকআপ)', url: item.backupUrl });
-      }
-
-      return {
-        id: item.id || 'ch_' + Math.random().toString(36).substring(2, 7),
-        name: item.title || item.name || 'Channel',
-        category: item.category || defaultCategory,
-        logo: item.logoUrl || item.logo || item.icon || '',
-        url: item.streamUrl || item.url || (servers[0] ? servers[0].url : ''),
-        servers: servers,
-        isLive: item.isLive !== false,
-        pinned: item.isPinned || false
-      };
-    }).filter(ch => ch.url);
-  },
-
-  normalizeMovies(objOrArr) {
-    const list = Array.isArray(objOrArr) ? objOrArr : Object.entries(objOrArr).map(([k, v]) => ({ id: k, ...v }));
-    return list.map(m => {
-      const servers = m.servers && Array.isArray(m.servers)
-        ? m.servers
-        : (m.streamUrl ? [{ name: 'সার্ভার ১', url: m.streamUrl }] : []);
-
-      if (m.backupUrl && !servers.some(s => s.url === m.backupUrl)) {
-        servers.push({ name: 'NAFI SERVER', url: m.backupUrl });
-      }
-
-      return {
-        id: m.id || 'mov_' + Math.random().toString(36).substring(2, 7),
-        title: m.title || m.name || 'Movie',
-        category: m.category || 'NAFI OTT Movies',
-        poster: m.poster || m.logo || m.logoUrl || '',
-        url: m.streamUrl || m.url || (servers[0] ? servers[0].url : ''),
-        servers: servers,
-        rating: m.rating || 'HD',
-        year: m.year || ''
-      };
-    }).filter(m => m.url);
-  },
-
-  normalizeSports(objOrArr) {
-    const list = Array.isArray(objOrArr) ? objOrArr : Object.entries(objOrArr).map(([k, v]) => ({ id: k, ...v }));
-    return list.map(s => {
-      const servers = s.servers && Array.isArray(s.servers)
-        ? s.servers
-        : (s.streamUrl ? [{ name: 'সার্ভার ১', url: s.streamUrl }] : []);
-
-      if (s.backupUrl && !servers.some(x => x.url === s.backupUrl)) {
-        servers.push({ name: 'ব্যাকআপ সার্ভার', url: s.backupUrl });
-      }
-
-      return {
-        id: s.id || 'sp_' + Math.random().toString(36).substring(2, 7),
-        title: s.title || s.name || 'Live Sports',
-        name: s.name || s.title || 'Live Sports',
-        category: s.category || s.sport || 'Cricket',
-        tournament: s.tournament || s.title || 'Live Sports',
-        poster: s.poster || s.logo || s.logoUrl || '',
-        logo: s.logo || s.logoUrl || s.poster || '',
-        team1: s.team1 || s.title?.split(' vs ')[0] || '',
-        team1Logo: s.team1Logo || '',
-        team2: s.team2 || s.title?.split(' vs ')[1] || '',
-        team2Logo: s.team2Logo || '',
-        score: s.score1 && s.score2 ? `${s.score1} - ${s.score2}` : (s.isLive ? 'LIVE' : 'VS'),
-        time: s.matchTimeFormatted || s.eventTime || 'Live Now',
-        status: s.status || (s.isLive ? '● Live Now' : 'Upcoming'),
-        isLive: s.isLive !== false,
-        url: s.streamUrl || s.url || (servers[0] ? servers[0].url : ''),
-        servers: servers
-      };
-    }).filter(s => s.url || (s.servers && s.servers.length > 0));
-  },
-
-  normalizeMatches(objOrArr) {
-    const list = Array.isArray(objOrArr) ? objOrArr : Object.entries(objOrArr).map(([k, v]) => ({ id: k, ...v }));
-    return list.map(m => ({
-      id: m.id || 'm_' + Math.random().toString(36).substring(2, 7),
-      title: m.title || (m.team1 && m.team2 ? `${m.team1} vs ${m.team2}` : 'Live Match'),
-      league: m.tournament || m.league || m.category || 'Sports',
-      status: (m.status || (m.isLive ? 'live' : 'upcoming')).toLowerCase().includes('live') ? 'live' : 'upcoming',
-      team1: {
-        name: m.team1 || 'Team 1',
-        logo: m.team1Logo || ''
-      },
-      team2: {
-        name: m.team2 || 'Team 2',
-        logo: m.team2Logo || ''
-      },
-      score: m.score || 'VS',
-      time: m.matchTimeFormatted || m.eventTime || m.time || 'Live Now',
-      streamUrl: m.streamUrl || m.url || '',
-      servers: m.servers || (m.streamUrl ? [{ name: 'Server 1', url: m.streamUrl }] : [])
-    }));
-  },
-
-  sportToMatch(sp) {
-    return {
-      id: 'm_' + sp.id,
-      title: sp.title,
-      league: sp.tournament || sp.category,
-      status: sp.isLive ? 'live' : 'upcoming',
-      team1: { name: sp.team1 || sp.title, logo: sp.team1Logo || sp.logo },
-      team2: { name: sp.team2 || 'Match', logo: sp.team2Logo || sp.logo },
-      score: sp.score || (sp.isLive ? 'LIVE' : 'VS'),
-      time: sp.time,
-      streamUrl: sp.url,
-      servers: sp.servers
-    };
-  },
-
-  matchToSport(m) {
-    return {
-      id: 'sp_' + m.id,
-      title: m.title,
-      name: m.title,
-      category: m.league,
-      tournament: m.league,
-      poster: m.team1.logo,
-      logo: m.team1.logo,
-      team1: m.team1.name,
-      team1Logo: m.team1.logo,
-      team2: m.team2.name,
-      team2Logo: m.team2.logo,
-      score: m.score,
-      time: m.time,
-      isLive: m.status === 'live',
-      url: m.streamUrl,
-      servers: m.servers
-    };
-  },
-
-  updateBadges() {
-    if (this.E['badge-tv-count']) this.E['badge-tv-count'].textContent = this.S.channels.length;
-    if (this.E['badge-movies-count']) this.E['badge-movies-count'].textContent = this.S.movies.length;
-    if (this.E['badge-sports-count']) this.E['badge-sports-count'].textContent = this.S.sports.length;
-    if (this.E['badge-playlists-count']) this.E['badge-playlists-count'].textContent = this.S.playlists.length;
-
-    if (this.E['tv-total-count']) this.E['tv-total-count'].textContent = `${this.S.channels.length} টি চ্যানেল`;
-    if (this.E['movies-total-count']) this.E['movies-total-count'].textContent = `${this.S.movies.length} টি মুভি`;
-    if (this.E['sports-total-count']) this.E['sports-total-count'].textContent = `${this.S.sports.length} টি স্পোর্টস স্ট্রিম`;
-    if (this.E['playlists-total-count']) this.E['playlists-total-count'].textContent = `${this.S.playlists.length} টি প্লেলিস্ট`;
-  },
-
   // ═══════════════════════════════════════════
-  // 6. RENDER ALL 4 MAIN VIEWS + SCHEDULE
+  // 6. VIEW 2: LIVE TV RENDERING & FILTERS
   // ═══════════════════════════════════════════
-  renderAllViews() {
-    this.renderChannels();
-    this.buildTvCatTabs();
-    this.renderMovies();
-    this.buildMovieCatTabs();
-    this.renderSports();
-    this.renderPlaylists();
-    this.renderSchedule();
-  },
-
-  switchTab(tabId) {
-    this.S.activeTab = tabId;
-
-    // Update top section tab buttons
-    document.querySelectorAll('.main-tab-btn').forEach(btn => {
-      btn.classList.toggle('on', btn.dataset.tab === tabId);
-      btn.setAttribute('aria-selected', btn.dataset.tab === tabId ? 'true' : 'false');
-    });
-
-    // Update bottom nav buttons
-    document.querySelectorAll('.bnav-btn').forEach(btn => {
-      btn.classList.toggle('on', btn.dataset.tab === tabId);
-    });
-
-    // Update side menu
-    document.querySelectorAll('.mi').forEach(m => {
-      if (m.id === `m-${tabId}`) m.classList.add('on');
-      else m.classList.remove('on');
-    });
-
-    // Hide all tab views, show active one
-    const views = ['livetv', 'movies', 'sports', 'playlists', 'schedule'];
-    views.forEach(v => {
-      const el = document.getElementById(`view-${v}`);
-      if (el) el.style.display = (v === tabId) ? 'block' : 'none';
-    });
-
-    // Scroll top of view into view if needed
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  },
-
-  // ── (A) LIVE TV VIEW ──
-  buildTvCatTabs() {
+  buildTvCategoryTabs() {
     const tabsContainer = this.E['cat-tabs'];
     if (!tabsContainer) return;
 
-    const categories = ['All', 'Favorites', 'Recent'];
-    const seen = new Set(['All', 'Favorites', 'Recent']);
-
+    // Collect unique normalized categories
+    const catMap = new Map();
     this.S.channels.forEach(ch => {
-      const cat = (ch.category || 'General').trim();
-      if (!seen.has(cat)) {
-        seen.add(cat);
-        categories.push(cat);
-      }
+      const c = ch.category || 'অন্যান্য';
+      catMap.set(c, (catMap.get(c) || 0) + 1);
     });
 
+    const sortedCats = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
+    const categories = ['সব চ্যানেল', ...sortedCats.map(x => x[0])];
+
     tabsContainer.innerHTML = categories.map(c => {
-      const isSel = (c === 'All' && !this.S.tvCatFilter) || this.S.tvCatFilter === c;
+      const isSel = (c === 'সব চ্যানেল' && !this.S.tvCatFilter) || this.S.tvCatFilter === c;
+      const count = c === 'সব চ্যানেল' ? this.S.channels.length : (catMap.get(c) || 0);
       return `
         <button class="cat-tab ${isSel ? 'on' : ''}" data-cat="${escHtml(c)}">
           <span>${escHtml(c)}</span>
+          <span class="cat-tab-badge">${count}</span>
         </button>
       `;
     }).join('');
@@ -1092,462 +605,129 @@ const APP = {
     tabsContainer.querySelectorAll('.cat-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         const cat = btn.dataset.cat;
-        this.S.tvCatFilter = cat === 'All' ? '' : cat;
-        this.S.gridPage = 1;
-        this.buildTvCatTabs();
-        this.renderChannels();
+        this.S.tvCatFilter = cat === 'সব চ্যানেল' ? '' : cat;
+        this.S.visibleTvCount = 60;
+        this.buildTvCategoryTabs();
+        this.renderTvChannels();
       });
     });
   },
 
-  renderChannels() {
+  renderTvChannels() {
     const grid = this.E['grid'];
     if (!grid) return;
 
     let list = [...this.S.channels];
 
-    if (this.S.tvCatFilter === 'Favorites') {
-      list = list.filter(ch => this.S.fav.includes(ch.id));
-    } else if (this.S.tvCatFilter === 'Recent') {
-      list = this.S.rec.map(id => list.find(ch => ch.id === id)).filter(Boolean);
-    } else if (this.S.tvCatFilter) {
-      list = list.filter(ch => (ch.category || 'General').trim() === this.S.tvCatFilter);
+    // 1. Source Filter (FAST TV vs NAFI TV24)
+    if (this.S.tvSourceFilter === 'fasttv') {
+      list = list.filter(c => c.source === 'fasttv');
+    } else if (this.S.tvSourceFilter === 'nafitv') {
+      list = list.filter(c => c.source === 'nafitv');
     }
 
-    list.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+    // 2. Category Filter
+    if (this.S.tvCatFilter) {
+      list = list.filter(c => (c.category || '').trim() === this.S.tvCatFilter);
+    }
 
+    // 3. Search Filter
+    if (this.S.tvSearchQuery) {
+      const q = this.S.tvSearchQuery.toLowerCase();
+      list = list.filter(c => c.name.toLowerCase().includes(q) || (c.category || '').toLowerCase().includes(q));
+    }
+
+    // Total Count
+    if (this.E['tv-total-count']) {
+      this.E['tv-total-count'].textContent = `${list.length} টি চ্যানেল`;
+    }
+
+    // Empty state
     if (list.length === 0) {
       grid.innerHTML = `
         <div class="empty" style="grid-column: 1 / -1; padding: 40px; text-align: center;">
-          <i class="fas fa-tv" style="font-size: 2rem; color: var(--t3); margin-bottom: 10px;"></i>
-          <p style="color: var(--t2);">কোনো চ্যানেল পাওয়া যায়নি।</p>
+          <i class="fas fa-satellite-dish" style="font-size: 2.2rem; color: var(--t3); margin-bottom: 10px;"></i>
+          <p style="color: var(--t2); font-weight: 600;">কোনো চ্যানেল পাওয়া যায়নি। ফিল্টার পরিবর্তন করুন।</p>
         </div>
       `;
       if (this.E['grid-more-wrap']) this.E['grid-more-wrap'].style.display = 'none';
       return;
     }
 
-    const countToShow = Math.min(this.S.gridPage * this.S.PAGE_SIZE, list.length);
-    const slice = list.slice(0, countToShow);
+    // Apply view layout class
+    grid.className = 'channel-grid ' + (this.S.tvViewMode === 'lst' ? 'view-list' : this.S.tvViewMode === 'g2' ? 'view-g2' : 'view-g3');
 
-    grid.innerHTML = slice.map(ch => this.createChannelCardHTML(ch)).join('');
+    // Slice for performance
+    const visibleItems = list.slice(0, this.S.visibleTvCount);
 
+    grid.innerHTML = visibleItems.map(c => {
+      const logo = c.logo || FALLBACK_LOGO_SVG;
+      const isFav = this.S.favorites.has(c.id);
+      const isCur = this.S.curItem && this.S.curItem.id === c.id;
+      const serverCount = c.servers ? c.servers.length : 1;
+      const sourceBadge = c.source === 'fasttv' ? 'FAST' : 'NAFI';
+
+      return `
+        <div class="cc ${isCur ? 'active-channel' : ''}" data-id="${escHtml(c.id)}" role="listitem">
+          <div class="cc-logo-wrap">
+            <img class="cc-logo" src="${escHtml(logo)}" alt="${escHtml(c.name)}" loading="lazy" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
+            <div class="cc-source-pill">${sourceBadge}</div>
+            <div class="cc-overlay-play"><i class="fas fa-play"></i></div>
+          </div>
+          <div class="cc-foot">
+            <div class="cc-name" title="${escHtml(c.name)}">${escHtml(c.name)}</div>
+            <div class="cc-meta">
+              <span class="cc-cat">${escHtml(c.category || 'Live TV')}</span>
+              ${serverCount > 1 ? `<span class="cc-servers">${serverCount} সার্ভার</span>` : ''}
+              <button class="cc-fav ${isFav ? 'on' : ''}" data-fav-id="${escHtml(c.id)}" aria-label="Favorite">
+                <i class="${isFav ? 'fas' : 'far'} fa-star"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Pagination Button
     const moreWrap = this.E['grid-more-wrap'];
-    const moreBtn = this.E['grid-more-btn'];
-    if (moreWrap && moreBtn) {
-      if (countToShow < list.length) {
-        moreWrap.style.display = 'flex';
-        moreBtn.innerHTML = `<i class="fas fa-chevron-down"></i> আরও চ্যানেল লোড করুন (${countToShow}/${list.length})`;
-      } else {
-        moreWrap.style.display = 'none';
-      }
+    if (moreWrap) {
+      moreWrap.style.display = list.length > this.S.visibleTvCount ? 'flex' : 'none';
     }
 
+    // Attach Channel Click
     grid.querySelectorAll('.cc').forEach(card => {
       card.addEventListener('click', (e) => {
-        if (e.target.closest('.fstar')) return;
+        if (e.target.closest('.cc-fav')) return; // Fav button handled separately
         const id = card.dataset.id;
-        const targetCh = this.S.channels.find(c => c.id === id);
-        if (targetCh) this.playItem(targetCh);
-      });
-
-      const favBtn = card.querySelector('.fstar');
-      if (favBtn) {
-        favBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.toggleFav(card.dataset.id);
-          this.renderChannels();
-        });
-      }
-    });
-  },
-
-  createChannelCardHTML(ch) {
-    const isPlaying = this.S.curItem && this.S.curItem.id === ch.id;
-    const isFav = this.S.fav.includes(ch.id);
-    const logoSrc = ch.logo || FALLBACK_LOGO_SVG;
-
-    return `
-      <div class="cc ${ch.pinned ? 'pinned' : ''} ${isPlaying ? 'now' : ''}" data-id="${escHtml(ch.id)}" role="listitem">
-        <div class="cc-logo-w">
-          ${ch.isLive ? '<div class="bdg bdg-live"><div class="dot"></div>LIVE</div>' : ''}
-          ${ch.pinned ? '<div class="bdg bdg-pin">PINNED</div>' : ''}
-          <img class="cc-logo" src="${escHtml(logoSrc)}" loading="lazy" alt="${escHtml(ch.name)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-        </div>
-        <div class="cc-foot">
-          <div class="cc-name" title="${escHtml(ch.name)}">${escHtml(ch.name)}</div>
-          <button class="fstar ${isFav ? 'on' : ''}" title="পছন্দ তালিকা">
-            <i class="fas fa-star"></i>
-          </button>
-        </div>
-      </div>
-    `;
-  },
-
-  // ── (B) MOVIES & SERIES VIEW ──
-  buildMovieCatTabs() {
-    const container = this.E['movie-cat-tabs'];
-    if (!container) return;
-
-    const categories = ['All'];
-    const seen = new Set(['All']);
-
-    this.S.movies.forEach(m => {
-      const cat = (m.category || 'General').trim();
-      if (!seen.has(cat)) {
-        seen.add(cat);
-        categories.push(cat);
-      }
-    });
-
-    container.innerHTML = categories.map(c => {
-      const isSel = (c === 'All' && !this.S.movieCatFilter) || this.S.movieCatFilter === c;
-      return `
-        <button class="cat-tab ${isSel ? 'on' : ''}" data-cat="${escHtml(c)}">
-          <span>${escHtml(c)}</span>
-        </button>
-      `;
-    }).join('');
-
-    container.querySelectorAll('.cat-tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const cat = btn.dataset.cat;
-        this.S.movieCatFilter = cat === 'All' ? '' : cat;
-        this.buildMovieCatTabs();
-        this.renderMovies();
+        const target = this.S.channels.find(c => c.id === id);
+        if (target) this.playItem(target);
       });
     });
-  },
 
-  renderMovies(query = '') {
-    const grid = this.E['movies-grid'];
-    if (!grid) return;
-
-    let list = [...this.S.movies];
-
-    if (this.S.movieCatFilter) {
-      list = list.filter(m => (m.category || '').trim() === this.S.movieCatFilter);
-    }
-
-    if (query) {
-      const q = query.toLowerCase();
-      list = list.filter(m => m.title.toLowerCase().includes(q) || (m.category || '').toLowerCase().includes(q));
-    }
-
-    if (list.length === 0) {
-      grid.innerHTML = `
-        <div class="empty" style="grid-column: 1 / -1; padding: 40px; text-align: center;">
-          <i class="fas fa-film" style="font-size: 2rem; color: var(--t3); margin-bottom: 10px;"></i>
-          <p style="color: var(--t2);">কোনো মুভি পাওয়া যায়নি।</p>
-        </div>
-      `;
-      return;
-    }
-
-    grid.innerHTML = list.map(m => {
-      const poster = m.poster || 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&fit=crop';
-      const serverCount = m.servers ? m.servers.length : 1;
-
-      return `
-        <div class="movie-card" data-id="${escHtml(m.id)}" role="listitem">
-          <div class="movie-poster-w">
-            <img class="movie-poster" src="${escHtml(poster)}" loading="lazy" alt="${escHtml(m.title)}" onerror="this.src='https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&fit=crop'" />
-            <div class="movie-badge-hd">${escHtml(m.rating || 'HD')}</div>
-            ${serverCount > 1 ? `<div class="movie-badge-sources">${serverCount} Servers</div>` : ''}
-            <div class="movie-overlay-play">
-              <div class="movie-play-ico"><i class="fas fa-play"></i></div>
-            </div>
-          </div>
-          <div class="movie-info">
-            <div class="movie-title" title="${escHtml(m.title)}">${escHtml(m.title)}</div>
-            <div class="movie-cat">${escHtml(m.category)} ${m.year ? `• ${m.year}` : ''}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    grid.querySelectorAll('.movie-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.dataset.id;
-        const targetMov = this.S.movies.find(m => m.id === id);
-        if (targetMov) this.playItem(targetMov);
-      });
-    });
-  },
-
-  // ── (C) SPORTS MATCHES VIEW ──
-  renderSports() {
-    const grid = this.E['sports-grid'];
-    if (!grid) return;
-
-    let list = [...this.S.sports];
-
-    if (this.S.sportsFilter === 'live') {
-      list = list.filter(s => s.isLive);
-    } else if (this.S.sportsFilter === 'cricket') {
-      list = list.filter(s => (s.category || '').toLowerCase().includes('cricket'));
-    } else if (this.S.sportsFilter === 'football') {
-      list = list.filter(s => (s.category || '').toLowerCase().includes('football'));
-    } else if (this.S.sportsFilter === 'upcoming') {
-      list = list.filter(s => !s.isLive);
-    }
-
-    if (list.length === 0) {
-      grid.innerHTML = `
-        <div class="empty" style="padding: 40px; text-align: center;">
-          <i class="fas fa-trophy" style="font-size: 2rem; color: var(--t3); margin-bottom: 10px;"></i>
-          <p style="color: var(--t2);">এই মুহূর্তে কোনো ম্যাচ পাওয়া যায়নি।</p>
-        </div>
-      `;
-      return;
-    }
-
-    grid.innerHTML = list.map(sp => {
-      const isLive = sp.isLive;
-      const team1Logo = sp.team1Logo || sp.logo || FALLBACK_LOGO_SVG;
-      const team2Logo = sp.team2Logo || FALLBACK_LOGO_SVG;
-      const team1Name = sp.team1 || sp.title.split(' vs ')[0] || sp.title;
-      const team2Name = sp.team2 || sp.title.split(' vs ')[1] || 'Match';
-
-      return `
-        <div class="sm-card ${isLive ? 'sm-live' : ''}" data-id="${escHtml(sp.id)}">
-          <div class="sm-top">
-            <div class="sm-tour">
-              <i class="fas fa-trophy" style="color: #f59e0b;"></i>
-              <span>${escHtml(sp.tournament || sp.category)}</span>
-            </div>
-            <div class="sm-badge ${isLive ? 'sm-badge-live' : 'sm-badge-upcoming'}">
-              ${isLive ? '<i class="fas fa-circle" style="font-size: 8px;"></i> LIVE' : '⏰ UPCOMING'}
-            </div>
-          </div>
-
-          <div class="sm-teams">
-            <div class="sm-team">
-              <img class="sm-team-logo" src="${escHtml(team1Logo)}" alt="${escHtml(team1Name)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-              <div class="sm-team-name">${escHtml(team1Name)}</div>
-            </div>
-
-            <div class="sm-center">
-              <div class="sm-score">${escHtml(sp.score || 'VS')}</div>
-              <div class="sm-vs">${isLive ? 'চলমান' : 'VS'}</div>
-            </div>
-
-            <div class="sm-team">
-              <img class="sm-team-logo" src="${escHtml(team2Logo)}" alt="${escHtml(team2Name)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-              <div class="sm-team-name">${escHtml(team2Name)}</div>
-            </div>
-          </div>
-
-          <div class="sm-foot">
-            <div class="sm-time">
-              <i class="far fa-clock"></i>
-              <span>${escHtml(sp.time)}</span>
-            </div>
-
-            <button class="sm-btn-play">
-              <i class="fas fa-play"></i>
-              <span>${isLive ? 'সরাসরি দেখুন' : 'ম্যাচ দেখুন'}</span>
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    grid.querySelectorAll('.sm-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.dataset.id;
-        const targetSp = this.S.sports.find(s => s.id === id);
-        if (targetSp) this.playItem(targetSp);
-      });
-    });
-  },
-
-  // ── (D) PLAYLISTS VIEW ──
-  renderPlaylists() {
-    const grid = this.E['playlists-grid'];
-    if (!grid) return;
-
-    let list = [...this.S.playlists];
-
-    if (list.length === 0) {
-      grid.innerHTML = `
-        <div class="empty" style="padding: 40px; text-align: center;">
-          <i class="fas fa-list-ul" style="font-size: 2rem; color: var(--t3); margin-bottom: 10px;"></i>
-          <p style="color: var(--t2);">কোনো প্লেলিস্ট পাওয়া যায়নি।</p>
-        </div>
-      `;
-      return;
-    }
-
-    grid.innerHTML = list.map(pl => {
-      const count = pl.channelCount ? `${pl.channelCount} টি চ্যানেল/স্ট্রিম` : 'ক্লাউড সিঙ্কড';
-
-      return `
-        <div class="pl-card" data-url="${escHtml(pl.url)}" data-name="${escHtml(pl.name)}">
-          <div class="pl-head">
-            <img class="pl-logo" src="${escHtml(pl.logo)}" alt="${escHtml(pl.name)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-            <div class="pl-head-info">
-              <div class="pl-name">${escHtml(pl.name)}</div>
-              <span class="pl-type-badge">${escHtml(pl.type || 'M3U')}</span>
-            </div>
-          </div>
-
-          <div class="pl-desc">${escHtml(pl.description)}</div>
-
-          <div class="pl-foot">
-            <div class="pl-count"><i class="fas fa-satellite-dish"></i> ${count}</div>
-            <button class="pl-btn-browse">
-              <span>চ্যানেল দেখুন</span>
-              <i class="fas fa-arrow-right"></i>
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    grid.querySelectorAll('.pl-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const url = card.dataset.url;
-        const name = card.dataset.name;
-        const pl = this.S.playlists.find(p => (p.url && p.url === url) || p.name === name);
-        if (pl) {
-          this.openPlaylistViewer(pl);
-        }
-      });
-    });
-  },
-
-  // ── (E) MATCH SCHEDULE VIEW ──
-  renderSchedule(filter = 'all') {
-    const listEl = this.E['match-list'];
-    if (!listEl) return;
-
-    let matches = [...this.S.matches];
-    if (filter === 'live') matches = matches.filter(m => m.status === 'live');
-    if (filter === 'upcoming') matches = matches.filter(m => m.status === 'upcoming');
-
-    if (matches.length === 0) {
-      listEl.innerHTML = `
-        <div class="match-empty" style="padding: 40px; text-align: center;">
-          <i class="fas fa-futbol" style="font-size: 2rem; color: var(--t3); margin-bottom: 10px;"></i>
-          <p style="color: var(--t2);">এই মুহূর্তে কোনো ম্যাচ শিডিউল নেই।</p>
-        </div>
-      `;
-      return;
-    }
-
-    listEl.innerHTML = matches.map(m => {
-      const isLive = m.status === 'live';
-      return `
-        <div class="match-card ${isLive ? 'mc-live' : ''}" data-id="${escHtml(m.id)}">
-          <div class="mc-header">
-            <div class="mc-league">
-              <i class="fas fa-trophy" style="color: #f59e0b;"></i>
-              <span>${escHtml(m.league)}</span>
-            </div>
-            <span class="mc-status ${isLive ? 'mcs-live' : 'mcs-upcoming'}">${isLive ? '🔴 LIVE' : '⏰ Upcoming'}</span>
-          </div>
-
-          <div class="mc-teams">
-            <div class="mc-team">
-              <img class="mc-team-logo" src="${escHtml(m.team1.logo || FALLBACK_LOGO_SVG)}" alt="${escHtml(m.team1.name)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-              <div class="mc-team-name">${escHtml(m.team1.name)}</div>
-            </div>
-
-            <div class="mc-score-wrap">
-              <div class="mc-score">${escHtml(m.score || 'VS')}</div>
-              <div class="mc-vs">${isLive ? 'চলমান' : 'VS'}</div>
-            </div>
-
-            <div class="mc-team">
-              <img class="mc-team-logo" src="${escHtml(m.team2.logo || FALLBACK_LOGO_SVG)}" alt="${escHtml(m.team2.name)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-              <div class="mc-team-name">${escHtml(m.team2.name)}</div>
-            </div>
-          </div>
-
-          <div class="mc-footer">
-            <div class="mc-datetime">
-              <i class="far fa-clock"></i>
-              <span>${escHtml(m.time)}</span>
-            </div>
-
-            <button class="mc-watch-btn ${isLive ? 'btn-live' : 'btn-not-started'}" data-stream="${escHtml(m.streamUrl)}" data-title="${escHtml(m.title)}">
-              <i class="fas fa-play"></i>
-              <span>${isLive ? 'সরাসরি দেখুন' : 'শিডিউল'}</span>
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    listEl.querySelectorAll('.mc-watch-btn').forEach(btn => {
+    // Attach Favorite Toggle
+    grid.querySelectorAll('.cc-fav').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const stream = btn.dataset.stream;
-        const title = btn.dataset.title;
-        if (stream) {
-          this.playItem({
-            id: 'm_' + Math.random().toString(36).substring(2, 7),
-            name: title,
-            title: title,
-            category: 'Sports',
-            url: stream
-          });
-        }
-      });
-    });
-  },
-
-  renderUpcomingCarousel() {
-    const trackHome = document.getElementById('upc-track-home');
-    if (!trackHome) return;
-
-    const items = [...this.S.sports, ...this.S.matches].slice(0, 10);
-    if (items.length === 0) return;
-
-    trackHome.innerHTML = items.map(m => {
-      const title = m.title || m.name || 'Match';
-      const isLive = m.isLive || m.status === 'live';
-      const thumb = m.poster || (m.team1 && m.team1.logo) || m.logo || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=400&fit=crop';
-      const time = m.time || 'Live';
-      const league = m.tournament || m.league || m.category || 'Sports';
-
-      return `
-        <div class="upc-card ${isLive ? 'upc-live' : ''}" data-stream="${escHtml(m.url || m.streamUrl)}" data-title="${escHtml(title)}">
-          <div class="upc-thumb-wrap">
-            <img class="upc-thumb" src="${escHtml(thumb)}" alt="${escHtml(title)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-            ${isLive ? '<div class="upc-live-badge"><div class="dot"></div>LIVE</div>' : '<div class="upc-upcoming-badge">UPCOMING</div>'}
-          </div>
-          <div class="upc-info">
-            <div class="upc-title">${escHtml(title)}</div>
-            <div class="upc-meta">${escHtml(league)}</div>
-            <div class="upc-time"><i class="far fa-clock"></i> ${escHtml(time)}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    trackHome.querySelectorAll('.upc-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const stream = card.dataset.stream;
-        const title = card.dataset.title;
-        if (stream) {
-          this.playItem({
-            id: 'car_' + Math.random().toString(36).substring(2, 7),
-            name: title,
-            title: title,
-            category: 'Sports',
-            url: stream
-          });
-        }
+        const id = btn.dataset.favId;
+        this.toggleFavorite(id);
       });
     });
   },
 
   // ═══════════════════════════════════════════
-  // 7. VIDEO PLAYER & MULTI-SERVER ENGINE
+  // 7. VIDEO PLAYER ENGINE (HLS & SHAKA DASH)
   // ═══════════════════════════════════════════
-  hlsInstance: null,
+  async initShakaIfNeeded() {
+    if (window.shaka && !this.shakaPlayer) {
+      shaka.polyfill.installAll();
+      if (shaka.Player.isBrowserSupported()) {
+        this.shakaPlayer = new shaka.Player(this.E['main-video']);
+        this.shakaPlayer.addEventListener('error', (event) => {
+          console.error('Shaka DRM Error:', event.detail);
+        });
+      }
+    }
+  },
 
   playItem(item) {
     if (!item) return;
@@ -1555,25 +735,25 @@ const APP = {
     this.S.currentServerIdx = 0;
     this.addRecent(item.id);
 
-    // Show player wrap
+    // Show player wrapper
     if (this.E['player-wrap']) {
       this.E['player-wrap'].classList.add('on');
       this.E['player-wrap'].scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // Set UI labels
+    // Set Info
     const itemName = item.title || item.name || 'Streaming';
     if (this.E['pw-name']) this.E['pw-name'].textContent = itemName;
-    if (this.E['pw-category']) this.E['pw-category'].textContent = item.category || 'NAFI TV HD STREAM';
+    if (this.E['pw-category']) this.E['pw-category'].textContent = item.category || 'LIVE HD STREAM';
     if (this.E['pw-logo']) {
       this.E['pw-logo'].src = item.logo || item.poster || FALLBACK_LOGO_SVG;
     }
 
-    // Set Multi-Server dropdown
+    // Populate Server Select Dropdown
     const serverSelect = this.E['pw-server-select'];
     const servers = (item.servers && item.servers.length > 0)
       ? item.servers
-      : [{ name: 'সার্ভার ১ (Main)', url: item.url }];
+      : [{ name: 'সার্ভার ১ (HD)', url: item.url }];
 
     if (serverSelect) {
       serverSelect.innerHTML = servers.map((s, idx) =>
@@ -1581,11 +761,11 @@ const APP = {
       ).join('');
     }
 
-    this.loadStreamSource(servers[0].url);
-    this.renderChannels();
+    this.loadStreamSource(servers[0].url, servers[0].drmKey || item.drmKey);
+    this.renderTvChannels();
   },
 
-  loadStreamSource(streamUrl) {
+  async loadStreamSource(streamUrl, drmKey = null, isProxyAttempt = false) {
     const video = this.E['main-video'];
     const loader = this.E['video-loader'];
     const errOverlay = this.E['video-error'];
@@ -1595,18 +775,54 @@ const APP = {
     if (loader) loader.style.display = 'flex';
     if (errOverlay) errOverlay.style.display = 'none';
 
+    // 1. Destroy active HLS instance if any
     if (this.hlsInstance) {
       this.hlsInstance.destroy();
       this.hlsInstance = null;
     }
 
-    const isHls = streamUrl.includes('.m3u8') || streamUrl.includes('m3u');
+    // 2. Unload active Shaka player if any
+    if (this.shakaPlayer) {
+      try {
+        await this.shakaPlayer.unload();
+      } catch (e) {}
+    }
 
+    const isMpd = streamUrl.includes('.mpd') || drmKey;
+    const isHls = streamUrl.includes('.m3u8') || streamUrl.includes('m3u') || !isMpd;
+
+    // ── PATH A: DASH / MPD with ClearKey DRM via Shaka Player ──
+    if (isMpd && window.shaka) {
+      try {
+        await this.initShakaIfNeeded();
+        if (this.shakaPlayer) {
+          if (drmKey) {
+            const [keyId, keyVal] = drmKey.split(':');
+            this.shakaPlayer.configure({
+              drm: {
+                clearKeys: {
+                  [keyId.trim()]: keyVal.trim()
+                }
+              }
+            });
+          }
+          await this.shakaPlayer.load(streamUrl);
+          if (loader) loader.style.display = 'none';
+          video.play().catch(() => {});
+          return;
+        }
+      } catch (err) {
+        console.warn('Shaka play error:', err);
+      }
+    }
+
+    // ── PATH B: HLS Stream via Hls.js ──
     if (isHls && window.Hls && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
-        backBufferLength: 90
+        backBufferLength: 90,
+        manifestLoadingMaxRetry: 2
       });
       this.hlsInstance = hls;
 
@@ -1623,32 +839,34 @@ const APP = {
           if (loader) loader.style.display = 'none';
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
+              // If not already tried through CORS proxy, retry with proxy
+              if (!isProxyAttempt && !streamUrl.includes('corsproxy.io')) {
+                const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(streamUrl)}`;
+                this.loadStreamSource(proxyUrl, drmKey, true);
+                return;
+              }
               hls.startLoad();
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               hls.recoverMediaError();
               break;
             default:
-              this.showPlayerError('সার্ভার থেকে স্ট্রিম লোড হতে সমস্যা হচ্ছে। পরবর্তী সার্ভার চেষ্টা করুন।');
+              this.showPlayerError('স্ট্রিম লোড হতে সমস্যা হচ্ছে। পরবর্তী সার্ভারে সুইচ করুন।');
               break;
           }
         }
       });
-    } else {
-      // Native MP4 / MKV / WebM
-      video.src = streamUrl;
-      video.load();
-      video.play().then(() => {
-        if (loader) loader.style.display = 'none';
-      }).catch(() => {
-        if (loader) loader.style.display = 'none';
-      });
+      return;
     }
 
-    video.onerror = () => {
+    // ── PATH C: Native Video ──
+    video.src = streamUrl;
+    video.load();
+    video.play().then(() => {
       if (loader) loader.style.display = 'none';
-      this.showPlayerError('ভিডিও প্লে করতে সমস্যা হচ্ছে। অন্য সার্ভার চেষ্টা করুন।');
-    };
+    }).catch(() => {
+      if (loader) loader.style.display = 'none';
+    });
   },
 
   showPlayerError(msg) {
@@ -1661,21 +879,23 @@ const APP = {
   nextServer() {
     if (!this.S.curItem) return;
     const servers = this.S.curItem.servers || [{ url: this.S.curItem.url }];
-    if (servers.length <= 1) {
-      this.loadStreamSource(this.S.curItem.url);
-      return;
-    }
+    if (servers.length <= 1) return;
+
     this.S.currentServerIdx = (this.S.currentServerIdx + 1) % servers.length;
     if (this.E['pw-server-select']) {
       this.E['pw-server-select'].value = this.S.currentServerIdx;
     }
-    this.loadStreamSource(servers[this.S.currentServerIdx].url);
+    const s = servers[this.S.currentServerIdx];
+    this.loadStreamSource(s.url, s.drmKey || this.S.curItem.drmKey);
   },
 
   closePlayer() {
     if (this.hlsInstance) {
       this.hlsInstance.destroy();
       this.hlsInstance = null;
+    }
+    if (this.shakaPlayer) {
+      this.shakaPlayer.unload().catch(() => {});
     }
     const video = this.E['main-video'];
     if (video) {
@@ -1684,719 +904,431 @@ const APP = {
       video.load();
     }
     if (this.E['player-wrap']) {
-      this.E['player-wrap'].classList.remove('on', 'qtv-locked');
+      this.E['player-wrap'].classList.remove('on');
     }
     this.S.curItem = null;
-    this.renderChannels();
-  },
-
-  toggleLock() {
-    this.S.isLocked = !this.S.isLocked;
-    const pWrap = this.E['player-wrap'];
-    const btn = this.E['qtv-lock-btn'];
-    if (pWrap) pWrap.classList.toggle('qtv-locked', this.S.isLocked);
-    if (btn) {
-      btn.innerHTML = this.S.isLocked
-        ? '<i class="fas fa-lock" style="color:#ff3b30;"></i>'
-        : '<i class="fas fa-lock-open"></i>';
-    }
-  },
-
-  toggleFav(id) {
-    const idx = this.S.fav.indexOf(id);
-    if (idx > -1) {
-      this.S.fav.splice(idx, 1);
-    } else {
-      this.S.fav.push(id);
-    }
-    Store.set('fav_channels', this.S.fav);
-  },
-
-  addRecent(id) {
-    this.S.rec = this.S.rec.filter(x => x !== id);
-    this.S.rec.unshift(id);
-    if (this.S.rec.length > 20) this.S.rec.pop();
-    Store.set('rec_channels', this.S.rec);
+    this.renderTvChannels();
   },
 
   // ═══════════════════════════════════════════
-  // 8. THEMES & STYLING
+  // 8. PLAYER CONTROLS (FULL CONTROL BAR)
   // ═══════════════════════════════════════════
-  applyTheme() {
-    document.body.classList.toggle('lt', !this.S.dark);
-    const thIco = document.getElementById('th-ico');
-    const togTheme = this.E['tog-theme'];
-
-    const iconClass = this.S.dark ? 'fas fa-moon' : 'fas fa-sun';
-    if (thIco) thIco.className = iconClass;
-    if (togTheme) togTheme.classList.toggle('on', this.S.dark);
-
-    Store.setString('theme_mode', this.S.dark ? 'dark' : 'light');
-  },
-
-  toggleTheme() {
-    this.S.dark = !this.S.dark;
-    this.applyTheme();
-  },
-
-  applyView(mode) {
-    this.S.view = mode;
-    Store.setString('channel_view', mode);
-
-    const grid = this.E['grid'];
-    if (!grid) return;
-    grid.className = 'channel-grid';
-    if (mode === 'lst') grid.classList.add('lst');
-    if (mode === 'g2') grid.classList.add('g2');
-
-    ['vb-lst', 'vb-g2', 'vb-g3'].forEach(id => {
-      const b = document.getElementById(id);
-      if (b) b.classList.remove('on');
-    });
-
-    const activeBtn = document.getElementById(mode === 'lst' ? 'vb-lst' : (mode === 'g2' ? 'vb-g2' : 'vb-g3'));
-    if (activeBtn) activeBtn.classList.add('on');
-
-    this.renderChannels();
-  },
-
-  applyFsz(size) {
-    this.S.fsz = size;
-    Store.setString('font_size', size);
-    document.body.classList.remove('fs-sm', 'fs-lg');
-    if (size === 'sm') document.body.classList.add('fs-sm');
-    if (size === 'lg') document.body.classList.add('fs-lg');
-
-    document.querySelectorAll('.fsb').forEach(b => {
-      b.classList.toggle('on', b.dataset.fs === size);
-    });
-  },
-
-  // ═══════════════════════════════════════════
-  // 9. EVENT BINDINGS
-  // ═══════════════════════════════════════════
-  bindEvents() {
-    // 4 Main Section Tabs (Top Bar)
-    document.querySelectorAll('.main-tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.switchTab(btn.dataset.tab);
-      });
-    });
-
-    // Bottom Navigation
-    document.querySelectorAll('.bnav-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.switchTab(btn.dataset.tab);
-      });
-    });
-
-    // Side Drawer Menu items
-    const menuMap = {
-      'm-livetv': 'livetv',
-      'm-movies': 'movies',
-      'm-sports': 'sports',
-      'm-playlists': 'playlists',
-      'm-schedule': 'schedule'
-    };
-    Object.entries(menuMap).forEach(([btnId, tab]) => {
-      const btn = document.getElementById(btnId);
-      if (btn) {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.closeMenu();
-          this.switchTab(tab);
-        });
-      }
-    });
-
-    // Side Menu
-    if (this.E['mo-btn']) this.E['mo-btn'].addEventListener('click', () => this.openMenu());
-    if (this.E['mc-btn']) this.E['mc-btn'].addEventListener('click', () => this.closeMenu());
-    if (this.E['menu-ov']) this.E['menu-ov'].addEventListener('click', () => this.closeMenu());
-
-    // Favorites & Recent from Menu
-    const mFav = document.getElementById('m-fav');
-    if (mFav) {
-      mFav.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.closeMenu();
-        this.S.tvCatFilter = 'Favorites';
-        this.switchTab('livetv');
-        this.buildTvCatTabs();
-        this.renderChannels();
-      });
-    }
-    const mRec = document.getElementById('m-rec');
-    if (mRec) {
-      mRec.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.closeMenu();
-        this.S.tvCatFilter = 'Recent';
-        this.switchTab('livetv');
-        this.buildTvCatTabs();
-        this.renderChannels();
-      });
-    }
-
-    // Refresh Data
-    const mRefresh = document.getElementById('m-refresh');
-    if (mRefresh) {
-      mRefresh.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.closeMenu();
-        this.fetchAllData();
-      });
-    }
-
-    // Import modal openers
-    const mImport = document.getElementById('m-import');
-    if (mImport) {
-      mImport.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.closeMenu();
-        this.openImportModal();
-      });
-    }
-    const btnOpenImportTab = document.getElementById('btn-open-import-tab');
-    if (btnOpenImportTab) {
-      btnOpenImportTab.addEventListener('click', () => this.openImportModal());
-    }
-
-    // Theme toggles
-    const themeBtn = document.getElementById('theme-btn');
-    if (themeBtn) themeBtn.addEventListener('click', () => this.toggleTheme());
-    if (this.E['tog-theme']) this.E['tog-theme'].addEventListener('click', () => this.toggleTheme());
-
-    // Settings Sheet
-    if (this.E['set-btn']) this.E['set-btn'].addEventListener('click', () => this.openSettings());
-    if (this.E['set-ov']) this.E['set-ov'].addEventListener('click', () => this.closeSettings());
-    const mSettings = document.getElementById('m-settings');
-    if (mSettings) {
-      mSettings.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.closeMenu();
-        this.openSettings();
-      });
-    }
-
-    // Font size buttons
-    document.querySelectorAll('.fsb').forEach(b => {
-      b.addEventListener('click', () => this.applyFsz(b.dataset.fs));
-    });
-
-    // Autoplay toggle
-    if (this.E['tog-auto']) {
-      this.E['tog-auto'].addEventListener('click', () => {
-        this.S.autoplay = !this.S.autoplay;
-        this.E['tog-auto'].classList.toggle('on', this.S.autoplay);
-        Store.setString('autoplay', String(this.S.autoplay));
-      });
-    }
-
-    // Save RTDB URL in settings
-    if (this.E['btn-save-rtdb']) {
-      this.E['btn-save-rtdb'].addEventListener('click', () => {
-        const input = this.E['setting-rtdb-url'];
-        if (input && input.value.trim()) {
-          this.S.rtdbUrl = input.value.trim();
-          Store.setString('rtdb_url', this.S.rtdbUrl);
-          this.closeSettings();
-          this.fetchAllData();
-        }
-      });
-    }
-
-    // Contact Sheet
-    const mContact = document.getElementById('m-contact');
-    if (mContact) {
-      mContact.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.closeMenu();
-        this.openContact();
-      });
-    }
-    if (this.E['contact-ov']) this.E['contact-ov'].addEventListener('click', () => this.closeContact());
-
-    // Search overlay
-    if (this.E['srch-btn']) this.E['srch-btn'].addEventListener('click', () => this.openSearch());
-    if (this.E['srch-close']) this.E['srch-close'].addEventListener('click', () => this.closeSearch());
-    if (this.E['srch-in']) {
-      this.E['srch-in'].addEventListener('input', (e) => this.handleGlobalSearch(e.target.value));
-    }
-
-    // Movie mini search input
-    if (this.E['movie-search-in']) {
-      this.E['movie-search-in'].addEventListener('input', (e) => {
-        this.renderMovies(e.target.value.trim());
-      });
-    }
-
-    // View switchers for channel grid
-    ['vb-lst', 'vb-g2', 'vb-g3'].forEach(id => {
-      const b = document.getElementById(id);
-      if (b) {
-        b.addEventListener('click', () => {
-          const mode = id === 'vb-lst' ? 'lst' : (id === 'vb-g2' ? 'g2' : 'g3');
-          this.applyView(mode);
-        });
-      }
-    });
-
-    // Pagination load more
-    if (this.E['grid-more-btn']) {
-      this.E['grid-more-btn'].addEventListener('click', () => {
-        this.S.gridPage++;
-        this.renderChannels();
-      });
-    }
-
-    // Player lock & close
-    if (this.E['qtv-lock-btn']) this.E['qtv-lock-btn'].addEventListener('click', () => this.toggleLock());
-    if (this.E['qtv-close-btn']) this.E['qtv-close-btn'].addEventListener('click', () => this.closePlayer());
-
-    // Player server switcher & retry
-    if (this.E['pw-server-select']) {
-      this.E['pw-server-select'].addEventListener('change', (e) => {
-        const idx = parseInt(e.target.value, 10);
-        this.S.currentServerIdx = idx;
-        if (this.S.curItem && this.S.curItem.servers && this.S.curItem.servers[idx]) {
-          this.loadStreamSource(this.S.curItem.servers[idx].url);
-        }
-      });
-    }
-    if (this.E['btn-player-retry']) {
-      this.E['btn-player-retry'].addEventListener('click', () => {
-        if (this.S.curItem) {
-          const servers = this.S.curItem.servers || [{ url: this.S.curItem.url }];
-          this.loadStreamSource(servers[this.S.currentServerIdx].url);
-        }
-      });
-    }
-    if (this.E['btn-player-next-server']) {
-      this.E['btn-player-next-server'].addEventListener('click', () => this.nextServer());
-    }
-
-    // Sports Filter Buttons
-    document.querySelectorAll('.sf-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.sf-btn').forEach(b => b.classList.remove('on'));
-        btn.classList.add('on');
-        this.S.sportsFilter = btn.dataset.sfilter;
-        this.renderSports();
-      });
-    });
-
-    // Schedule Filter Buttons
-    document.querySelectorAll('.mf-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.mf-btn').forEach(b => b.classList.remove('on'));
-        btn.classList.add('on');
-        this.renderSchedule(btn.dataset.filter);
-      });
-    });
-
-    // Import modal events
-    if (this.E['btn-close-import']) this.E['btn-close-import'].addEventListener('click', () => this.closeImportModal());
-    if (this.E['btn-do-import']) this.E['btn-do-import'].addEventListener('click', () => this.handleCustomImport());
-
-    // Import Presets
-    const bindPreset = (id, url) => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.addEventListener('click', async () => {
-          if (this.E['import-url-input']) this.E['import-url-input'].value = url;
-          await this.handleCustomImport();
-        });
-      }
-    };
-    bindPreset('preset-bd-sports', 'https://raw.githubusercontent.com/srhady/tapmad-bd/refs/heads/main/tapmad_bd.json');
-    bindPreset('preset-live-tv', 'https://raw.githubusercontent.com/nafitv24-web/NAFI-TV/refs/heads/main/Update%20Channel.m3u');
-    bindPreset('preset-nafi-sports', 'https://raw.githubusercontent.com/nafitv24-web/NAFI-TV/refs/heads/main/Sports%20Channel%20NF.m3u');
-    bindPreset('preset-movies-json', 'https://raw.githubusercontent.com/nafitv24-web/NAFI-TV/refs/heads/main/movies.json');
-
-    // Playlist Viewer modal events
-    const btnClosePl = document.getElementById('btn-close-pl-viewer');
-    if (btnClosePl) btnClosePl.addEventListener('click', () => this.closePlaylistViewer());
-
-    const plViewerOv = document.getElementById('pl-viewer-ov');
-    if (plViewerOv) {
-      plViewerOv.addEventListener('click', (e) => {
-        if (e.target === plViewerOv) this.closePlaylistViewer();
-      });
-    }
-
-    const plSearch = document.getElementById('pl-viewer-search');
-    if (plSearch) {
-      plSearch.addEventListener('input', (e) => {
-        if (this.S.activeViewerPlaylist && this.S.activeViewerPlaylist.items) {
-          this.S.viewerPage = 1;
-          this.renderViewerChannels(this.S.activeViewerPlaylist.items, e.target.value.trim());
-        }
-      });
-    }
-
-    const btnPlMore = document.getElementById('btn-pl-load-more');
-    if (btnPlMore) {
-      btnPlMore.addEventListener('click', () => {
-        if (this.S.activeViewerPlaylist && this.S.activeViewerPlaylist.items) {
-          this.S.viewerPage++;
-          const q = plSearch ? plSearch.value.trim() : '';
-          this.renderViewerChannels(this.S.activeViewerPlaylist.items, q);
-        }
-      });
-    }
-
-    // Initialize Video Controls
-    this.initVideoControls();
-  },
-
-  // ═══════════════════════════════════════════
-  // 9. MODERN VIDEO CONTROLS ENGINE
-  // ═══════════════════════════════════════════
-  initVideoControls() {
+  initPlayerControls() {
     const video = this.E['main-video'];
-    const pWrap = this.E['player-wrap'];
-    const vctrlBar = document.getElementById('vctrl-bar');
-    const btnBigPlay = document.getElementById('vctrl-big-play');
-    const btnPlay = document.getElementById('vctrl-btn-play');
-    const btnRewind = document.getElementById('vctrl-btn-rewind');
-    const btnForward = document.getElementById('vctrl-btn-forward');
-    const btnMute = document.getElementById('vctrl-btn-mute');
-    const volSlider = document.getElementById('vctrl-vol-slider');
-    const seekSlider = document.getElementById('vctrl-seek-slider');
-    const seekProg = document.getElementById('vctrl-seek-prog');
-    const seekBuffer = document.getElementById('vctrl-seek-buffer');
-    const timeDisplay = document.getElementById('vctrl-time-display');
-    const timeVal = document.getElementById('vctrl-time-val');
-    const btnAspect = document.getElementById('vctrl-btn-aspect');
-    const aspectLbl = document.getElementById('vctrl-aspect-lbl');
-    const btnPip = document.getElementById('vctrl-btn-pip');
-    const btnFs = document.getElementById('vctrl-btn-fs');
+    const playBtn = this.E['vctrl-play'];
+    const bigPlayBtn = this.E['vctrl-big-play'];
+    const prog = this.E['vctrl-prog'];
+    const progFill = this.E['vctrl-prog-fill'];
+    const timeDisplay = this.E['vctrl-time'];
+    const muteBtn = this.E['vctrl-mute'];
+    const vol = this.E['vctrl-vol'];
+    const pipBtn = this.E['vctrl-pip'];
+    const fullBtn = this.E['vctrl-full'];
+    const closeBtn = this.E['pw-close'];
+    const serverSelect = this.E['pw-server-select'];
+    const retryBtn = document.getElementById('player-err-retry');
+    const nextSrvBtn = document.getElementById('player-err-next');
 
     if (!video) return;
 
-    let isSeeking = false;
-    let hideTimer = null;
-
-    const showControls = () => {
-      if (this.S.isLocked) return;
-      if (vctrlBar) vctrlBar.classList.remove('vctrl-hidden');
-      clearTimeout(hideTimer);
-      if (!video.paused) {
-        hideTimer = setTimeout(() => {
-          if (!video.paused && !isSeeking) {
-            if (vctrlBar) vctrlBar.classList.add('vctrl-hidden');
-          }
-        }, 3500);
-      }
-    };
-
-    const artPlayer = document.getElementById('art-player');
-    if (artPlayer) {
-      artPlayer.addEventListener('pointermove', showControls);
-      artPlayer.addEventListener('touchstart', showControls, { passive: true });
-      artPlayer.addEventListener('click', (e) => {
-        if (e.target === video || e.target === artPlayer) {
-          if (video.paused) video.play().catch(() => {});
-          else video.pause();
-        }
-        showControls();
-      });
-    }
-
-    const togglePlayPause = () => {
-      if (video.paused) {
+    const togglePlay = () => {
+      if (video.paused || video.ended) {
         video.play().catch(() => {});
       } else {
         video.pause();
       }
     };
 
-    if (btnPlay) btnPlay.addEventListener('click', (e) => { e.stopPropagation(); togglePlayPause(); });
-    if (btnBigPlay) btnBigPlay.addEventListener('click', (e) => { e.stopPropagation(); togglePlayPause(); });
+    if (playBtn) playBtn.addEventListener('click', togglePlay);
+    if (bigPlayBtn) bigPlayBtn.addEventListener('click', togglePlay);
+    video.addEventListener('click', togglePlay);
 
-    if (btnRewind) {
-      btnRewind.addEventListener('click', (e) => {
-        e.stopPropagation();
-        video.currentTime = Math.max(0, video.currentTime - 10);
-        showControls();
-      });
-    }
+    video.addEventListener('play', () => {
+      if (playBtn) playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+      if (bigPlayBtn) bigPlayBtn.style.display = 'none';
+    });
 
-    if (btnForward) {
-      btnForward.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const max = isFinite(video.duration) ? video.duration : Infinity;
-        video.currentTime = Math.min(max, video.currentTime + 10);
-        showControls();
-      });
-    }
-
-    const updatePlayState = () => {
-      const isPaused = video.paused;
-      if (btnPlay) {
-        btnPlay.innerHTML = isPaused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
-      }
-      if (btnBigPlay) {
-        btnBigPlay.style.display = isPaused ? 'flex' : 'none';
-      }
-      showControls();
-    };
-
-    video.addEventListener('play', updatePlayState);
-    video.addEventListener('pause', updatePlayState);
-    video.addEventListener('playing', updatePlayState);
-
-    const formatTime = (sec) => {
-      if (isNaN(sec) || !isFinite(sec) || sec < 0) return '00:00';
-      const m = Math.floor(sec / 60);
-      const s = Math.floor(sec % 60);
-      const h = Math.floor(m / 60);
-      if (h > 0) {
-        const mm = m % 60;
-        return `${h}:${mm < 10 ? '0' : ''}${mm}:${s < 10 ? '0' : ''}${s}`;
-      }
-      return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-    };
+    video.addEventListener('pause', () => {
+      if (playBtn) playBtn.innerHTML = '<i class="fas fa-play"></i>';
+      if (bigPlayBtn) bigPlayBtn.style.display = 'flex';
+    });
 
     video.addEventListener('timeupdate', () => {
-      if (isSeeking) return;
-      const dur = video.duration;
-      const cur = video.currentTime;
-
-      if (isFinite(dur) && dur > 0) {
-        const pct = (cur / dur) * 100;
-        if (seekProg) seekProg.style.width = pct + '%';
-        if (seekSlider) seekSlider.value = pct;
-        if (timeVal) timeVal.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+      if (prog && progFill && video.duration && !isNaN(video.duration) && isFinite(video.duration)) {
+        const pct = (video.currentTime / video.duration) * 100;
+        prog.value = pct;
+        progFill.style.width = pct + '%';
         if (timeDisplay) {
-          const liveBadge = timeDisplay.querySelector('.vctrl-live-badge');
-          if (liveBadge) liveBadge.style.display = 'none';
+          timeDisplay.textContent = `${this.formatTime(video.currentTime)} / ${this.formatTime(video.duration)}`;
         }
-      } else {
-        // Live stream
-        if (seekProg) seekProg.style.width = '100%';
-        if (seekSlider) seekSlider.value = 100;
-        if (timeVal) timeVal.textContent = formatTime(cur);
-        if (timeDisplay) {
-          const liveBadge = timeDisplay.querySelector('.vctrl-live-badge');
-          if (liveBadge) liveBadge.style.display = 'inline-flex';
-        }
+      } else if (timeDisplay) {
+        timeDisplay.innerHTML = '<span class="live-dot-red"></span> LIVE';
       }
     });
 
-    video.addEventListener('progress', () => {
-      if (video.buffered.length > 0 && isFinite(video.duration) && video.duration > 0) {
-        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-        const pct = (bufferedEnd / video.duration) * 100;
-        if (seekBuffer) seekBuffer.style.width = pct + '%';
-      }
-    });
-
-    if (seekSlider) {
-      seekSlider.addEventListener('input', (e) => {
-        isSeeking = true;
-        const pct = parseFloat(e.target.value);
-        if (seekProg) seekProg.style.width = pct + '%';
-        if (isFinite(video.duration) && video.duration > 0) {
-          const targetTime = (pct / 100) * video.duration;
-          if (timeVal) timeVal.textContent = `${formatTime(targetTime)} / ${formatTime(video.duration)}`;
+    if (prog) {
+      prog.addEventListener('input', () => {
+        if (video.duration && !isNaN(video.duration)) {
+          video.currentTime = (prog.value / 100) * video.duration;
         }
-      });
-      seekSlider.addEventListener('change', (e) => {
-        const pct = parseFloat(e.target.value);
-        if (isFinite(video.duration) && video.duration > 0) {
-          video.currentTime = (pct / 100) * video.duration;
-        }
-        isSeeking = false;
-        showControls();
       });
     }
 
-    const updateVolumeIcon = () => {
-      if (!btnMute) return;
-      if (video.muted || video.volume === 0) {
-        btnMute.innerHTML = '<i class="fas fa-volume-xmark" style="color:#ef4444;"></i>';
-      } else if (video.volume < 0.5) {
-        btnMute.innerHTML = '<i class="fas fa-volume-low"></i>';
-      } else {
-        btnMute.innerHTML = '<i class="fas fa-volume-high"></i>';
-      }
-    };
-
-    if (btnMute) {
-      btnMute.addEventListener('click', (e) => {
-        e.stopPropagation();
+    if (muteBtn) {
+      muteBtn.addEventListener('click', () => {
         video.muted = !video.muted;
-        updateVolumeIcon();
-        if (volSlider) volSlider.value = video.muted ? 0 : video.volume;
-        showControls();
+        muteBtn.innerHTML = video.muted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
       });
     }
 
-    if (volSlider) {
-      volSlider.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        video.volume = val;
-        video.muted = (val === 0);
-        updateVolumeIcon();
-        showControls();
+    if (vol) {
+      vol.addEventListener('input', () => {
+        video.volume = vol.value;
+        video.muted = (vol.value == 0);
+        if (muteBtn) {
+          muteBtn.innerHTML = video.muted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
+        }
       });
     }
 
-    const aspectModes = ['aspect-fit', 'aspect-fill', 'aspect-stretch'];
-    const aspectLabels = ['Fit', 'Fill', '16:9'];
-    let aspectIdx = 0;
-
-    if (btnAspect) {
-      btnAspect.addEventListener('click', (e) => {
-        e.stopPropagation();
-        aspectModes.forEach(cls => video.classList.remove(cls));
-        aspectIdx = (aspectIdx + 1) % aspectModes.length;
-        video.classList.add(aspectModes[aspectIdx]);
-        if (aspectLbl) aspectLbl.textContent = aspectLabels[aspectIdx];
-        showControls();
-      });
-    }
-
-    if (btnPip) {
-      btnPip.addEventListener('click', async (e) => {
-        e.stopPropagation();
+    if (pipBtn && document.pictureInPictureEnabled) {
+      pipBtn.addEventListener('click', async () => {
         try {
           if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
-          } else if (video.requestPictureInPicture) {
+          } else {
             await video.requestPictureInPicture();
           }
-        } catch (err) {
-          console.warn('PiP error:', err);
-        }
+        } catch (e) {}
       });
     }
 
-    if (btnFs) {
-      btnFs.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const target = pWrap || video;
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-          if (target.requestFullscreen) target.requestFullscreen().catch(() => {});
-          else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+    if (fullBtn) {
+      fullBtn.addEventListener('click', () => {
+        const wrap = this.E['player-wrap'];
+        if (!document.fullscreenElement) {
+          if (wrap.requestFullscreen) wrap.requestFullscreen();
           else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
         } else {
-          if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+          if (document.exitFullscreen) document.exitFullscreen();
         }
-        showControls();
       });
     }
 
-    updatePlayState();
-    updateVolumeIcon();
-  },
+    if (closeBtn) closeBtn.addEventListener('click', () => this.closePlayer());
 
-  // ═══════════════════════════════════════════
-  // 10. MODALS & SEARCH HANDLERS
-  // ═══════════════════════════════════════════
-  openMenu() {
-    if (this.E['menu']) this.E['menu'].classList.add('on');
-    if (this.E['menu-ov']) this.E['menu-ov'].classList.add('on');
-  },
-  closeMenu() {
-    if (this.E['menu']) this.E['menu'].classList.remove('on');
-    if (this.E['menu-ov']) this.E['menu-ov'].classList.remove('on');
-  },
-
-  openSettings() {
-    if (this.E['settings']) this.E['settings'].classList.add('on');
-    if (this.E['set-ov']) this.E['set-ov'].classList.add('on');
-  },
-  closeSettings() {
-    if (this.E['settings']) this.E['settings'].classList.remove('on');
-    if (this.E['set-ov']) this.E['set-ov'].classList.remove('on');
-  },
-
-  openContact() {
-    if (this.E['contact-sheet']) this.E['contact-sheet'].classList.add('on');
-    if (this.E['contact-ov']) this.E['contact-ov'].classList.add('on');
-  },
-  closeContact() {
-    if (this.E['contact-sheet']) this.E['contact-sheet'].classList.remove('on');
-    if (this.E['contact-ov']) this.E['contact-ov'].classList.remove('on');
-  },
-
-  openImportModal() {
-    if (this.E['import-ov']) this.E['import-ov'].style.display = 'flex';
-  },
-  closeImportModal() {
-    if (this.E['import-ov']) this.E['import-ov'].style.display = 'none';
-  },
-
-  async handleCustomImport() {
-    const urlInput = this.E['import-url-input'];
-    const fileInput = this.E['import-file-input'];
-
-    let items = [];
-    let plName = 'Custom Playlist';
-    let plUrl = '';
-
-    if (urlInput && urlInput.value.trim()) {
-      plUrl = urlInput.value.trim();
-      plName = this.extractPlaylistName(plUrl, 'Custom Playlist');
-      const text = await this.fetchWithFallback(plUrl);
-      if (text) {
-        items = this.parsePlaylistText(text, plName);
-      }
-    } else if (fileInput && fileInput.files && fileInput.files[0]) {
-      const file = fileInput.files[0];
-      plName = file.name.replace(/\.[^/.]+$/, '');
-      const text = await file.text();
-      plUrl = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-      items = this.parsePlaylistText(text, plName);
-    }
-
-    if (items.length > 0) {
-      const plItem = {
-        id: 'custom_' + Math.random().toString(36).substring(2, 8),
-        name: plName,
-        description: 'ইউজার কর্তৃক যোগ করা কাস্টম প্লেলিস্ট',
-        logo: FALLBACK_LOGO_SVG,
-        url: plUrl,
-        type: plUrl.includes('.json') ? 'JSON' : 'M3U',
-        channelCount: items.length,
-        items: items
-      };
-
-      this.S.playlists.unshift(plItem);
-      this.S.customPlaylists.push({ name: plName, url: plUrl });
-      Store.set('custom_playlists', this.S.customPlaylists);
-
-      items.forEach(it => {
-        if (!this.S.channels.some(c => c.url === it.url)) {
-          this.S.channels.push(it);
+    if (serverSelect) {
+      serverSelect.addEventListener('change', () => {
+        const idx = parseInt(serverSelect.value, 10);
+        this.S.currentServerIdx = idx;
+        if (this.S.curItem && this.S.curItem.servers && this.S.curItem.servers[idx]) {
+          const s = this.S.curItem.servers[idx];
+          this.loadStreamSource(s.url, s.drmKey || this.S.curItem.drmKey);
         }
       });
+    }
 
-      this.updateBadges();
-      this.renderAllViews();
-      this.closeImportModal();
-      alert(`সফলভাবে ${items.length} টি কনটেন্ট যুক্ত হয়েছে!`);
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => {
+        if (this.S.curItem) {
+          const s = (this.S.curItem.servers && this.S.curItem.servers[this.S.currentServerIdx])
+            ? this.S.curItem.servers[this.S.currentServerIdx]
+            : { url: this.S.curItem.url };
+          this.loadStreamSource(s.url, s.drmKey || this.S.curItem.drmKey);
+        }
+      });
+    }
+
+    if (nextSrvBtn) {
+      nextSrvBtn.addEventListener('click', () => this.nextServer());
+    }
+  },
+
+  formatTime(secs) {
+    if (isNaN(secs) || !isFinite(secs)) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  },
+
+  // ═══════════════════════════════════════════
+  // 9. EVENT LISTENERS & INTERACTION
+  // ═══════════════════════════════════════════
+  bindEvents() {
+    // 1. Top Section Tabs (Live Events, Live TV, Download App)
+    if (this.E['tab-btn-events']) {
+      this.E['tab-btn-events'].addEventListener('click', () => this.switchTab('events'));
+    }
+    if (this.E['tab-btn-livetv']) {
+      this.E['tab-btn-livetv'].addEventListener('click', () => this.switchTab('livetv'));
+    }
+    if (this.E['tab-btn-download']) {
+      this.E['tab-btn-download'].addEventListener('click', () => this.switchTab('download'));
+    }
+
+    // 2. Bottom Nav Buttons
+    if (this.E['bnav-events']) {
+      this.E['bnav-events'].addEventListener('click', () => this.switchTab('events'));
+    }
+    if (this.E['bnav-livetv']) {
+      this.E['bnav-livetv'].addEventListener('click', () => this.switchTab('livetv'));
+    }
+    if (this.E['bnav-download']) {
+      this.E['bnav-download'].addEventListener('click', () => this.switchTab('download'));
+    }
+
+    // 3. Side Drawer Menu Items
+    if (this.E['m-events']) {
+      this.E['m-events'].addEventListener('click', (e) => { e.preventDefault(); this.switchTab('events'); });
+    }
+    if (this.E['m-livetv']) {
+      this.E['m-livetv'].addEventListener('click', (e) => { e.preventDefault(); this.switchTab('livetv'); });
+    }
+    if (this.E['m-download']) {
+      this.E['m-download'].addEventListener('click', (e) => { e.preventDefault(); this.switchTab('download'); });
+    }
+
+    // 4. Favorites & Recent Drawer Items
+    if (this.E['m-fav']) {
+      this.E['m-fav'].addEventListener('click', (e) => {
+        e.preventDefault();
+        this.switchTab('livetv');
+        this.filterByFavorites();
+      });
+    }
+    if (this.E['m-rec']) {
+      this.E['m-rec'].addEventListener('click', (e) => {
+        e.preventDefault();
+        this.switchTab('livetv');
+        this.filterByRecents();
+      });
+    }
+
+    // 5. Drawer Open/Close
+    if (this.E['menu-btn']) this.E['menu-btn'].addEventListener('click', () => this.openMenu());
+    if (this.E['mc-btn']) this.E['mc-btn'].addEventListener('click', () => this.closeMenu());
+    if (this.E['menu-ov']) this.E['menu-ov'].addEventListener('click', () => this.closeMenu());
+
+    // 6. Settings Modal
+    if (this.E['m-settings']) {
+      this.E['m-settings'].addEventListener('click', (e) => {
+        e.preventDefault();
+        this.closeMenu();
+        this.openSettings();
+      });
+    }
+    if (this.E['set-ov']) this.E['set-ov'].addEventListener('click', () => this.closeSettings());
+
+    // 7. Contact Modal
+    if (this.E['m-contact']) {
+      this.E['m-contact'].addEventListener('click', (e) => {
+        e.preventDefault();
+        this.closeMenu();
+        this.openContact();
+      });
+    }
+    if (this.E['contact-ov']) this.E['contact-ov'].addEventListener('click', () => this.closeContact());
+    if (this.E['cs-btn']) this.E['cs-btn'].addEventListener('click', () => this.closeContact());
+
+    // 8. Live Events Filters
+    const eventsFilters = this.E['events-filters'];
+    if (eventsFilters) {
+      eventsFilters.querySelectorAll('.sf-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          eventsFilters.querySelectorAll('.sf-btn').forEach(b => b.classList.remove('on'));
+          btn.classList.add('on');
+          this.S.eventFilter = btn.dataset.efilter || 'all';
+          this.renderEvents();
+        });
+      });
+    }
+
+    // 9. TV Source Filter (FAST TV vs NAFI TV24)
+    const tvSourceTabs = this.E['tv-source-tabs'];
+    if (tvSourceTabs) {
+      tvSourceTabs.querySelectorAll('.source-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          tvSourceTabs.querySelectorAll('.source-pill').forEach(p => p.classList.remove('on'));
+          pill.classList.add('on');
+          this.S.tvSourceFilter = pill.dataset.source || 'all';
+          this.S.visibleTvCount = 60;
+          this.renderTvChannels();
+        });
+      });
+    }
+
+    // 10. TV View Layout Buttons (List / 2 Col / 3 Col)
+    if (this.E['vb-lst']) {
+      this.E['vb-lst'].addEventListener('click', () => this.setTvViewMode('lst'));
+    }
+    if (this.E['vb-g2']) {
+      this.E['vb-g2'].addEventListener('click', () => this.setTvViewMode('g2'));
+    }
+    if (this.E['vb-g3']) {
+      this.E['vb-g3'].addEventListener('click', () => this.setTvViewMode('g3'));
+    }
+
+    // 11. Pagination Load More
+    if (this.E['grid-more-btn']) {
+      this.E['grid-more-btn'].addEventListener('click', () => {
+        this.S.visibleTvCount += 40;
+        this.renderTvChannels();
+      });
+    }
+
+    // 12. Global Search Overlay
+    if (this.E['srch-btn']) this.E['srch-btn'].addEventListener('click', () => this.openSearch());
+    if (this.E['srch-close']) this.E['srch-close'].addEventListener('click', () => this.closeSearch());
+    if (this.E['srch-in']) {
+      this.E['srch-in'].addEventListener('input', (e) => this.handleGlobalSearch(e.target.value));
+    }
+
+    // 13. Settings Toggles
+    if (this.E['tog-theme']) {
+      this.E['tog-theme'].addEventListener('click', () => {
+        const isLt = document.body.classList.toggle('lt');
+        this.S.theme = isLt ? 'light' : 'dark';
+        this.E['tog-theme'].classList.toggle('on', !isLt);
+        localStorage.setItem('nafitv_theme', this.S.theme);
+      });
+    }
+
+    if (this.E['tog-auto']) {
+      this.E['tog-auto'].addEventListener('click', () => {
+        this.S.autoplay = !this.S.autoplay;
+        this.E['tog-auto'].classList.toggle('on', this.S.autoplay);
+      });
+    }
+  },
+
+  setTvViewMode(mode) {
+    this.S.tvViewMode = mode;
+    ['vb-lst', 'vb-g2', 'vb-g3'].forEach(id => {
+      if (this.E[id]) this.E[id].classList.remove('on');
+    });
+    if (mode === 'lst' && this.E['vb-lst']) this.E['vb-lst'].classList.add('on');
+    if (mode === 'g2' && this.E['vb-g2']) this.E['vb-g2'].classList.add('on');
+    if (mode === 'g3' && this.E['vb-g3']) this.E['vb-g3'].classList.add('on');
+    this.renderTvChannels();
+  },
+
+  // ═══════════════════════════════════════════
+  // 10. FAVORITES & RECENTS PERSISTENCE
+  // ═══════════════════════════════════════════
+  toggleFavorite(id) {
+    if (this.S.favorites.has(id)) {
+      this.S.favorites.delete(id);
     } else {
-      alert('প্লেলিস্ট ফাইল বা লিঙ্কটি সঠিক নয়। অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
+      this.S.favorites.add(id);
     }
+    try {
+      localStorage.setItem('nafitv_favs', JSON.stringify(Array.from(this.S.favorites)));
+    } catch (e) {}
+    this.renderTvChannels();
   },
 
-  openSearch() {
-    if (this.E['srch-ov']) {
-      this.E['srch-ov'].classList.add('on');
-      if (this.E['srch-in']) {
-        this.E['srch-in'].value = '';
-        this.E['srch-in'].focus();
-      }
-      this.handleGlobalSearch('');
-    }
+  addRecent(id) {
+    if (!id) return;
+    this.S.recents = [id, ...this.S.recents.filter(x => x !== id)].slice(0, 20);
+    try {
+      localStorage.setItem('nafitv_recents', JSON.stringify(this.S.recents));
+    } catch (e) {}
   },
-  closeSearch() {
-    if (this.E['srch-ov']) this.E['srch-ov'].classList.remove('on');
+
+  filterByFavorites() {
+    this.S.tvCatFilter = '';
+    const favChannels = this.S.channels.filter(c => this.S.favorites.has(c.id));
+    if (favChannels.length === 0) {
+      alert('আপনার পছন্দের তালিকায় কোনো চ্যানেল যুক্ত করা নেই। চ্যানেলের স্টার (★) বাটনে চাপ দিন।');
+      return;
+    }
+    const grid = this.E['grid'];
+    if (!grid) return;
+    grid.innerHTML = favChannels.map(c => `
+      <div class="cc" data-id="${escHtml(c.id)}">
+        <div class="cc-logo-wrap">
+          <img class="cc-logo" src="${escHtml(c.logo || FALLBACK_LOGO_SVG)}" alt="${escHtml(c.name)}" />
+          <div class="cc-overlay-play"><i class="fas fa-play"></i></div>
+        </div>
+        <div class="cc-foot">
+          <div class="cc-name">${escHtml(c.name)}</div>
+          <div class="cc-meta"><span class="cc-cat">${escHtml(c.category)}</span></div>
+        </div>
+      </div>
+    `).join('');
+
+    grid.querySelectorAll('.cc').forEach(card => {
+      card.addEventListener('click', () => {
+        const target = this.S.channels.find(c => c.id === card.dataset.id);
+        if (target) this.playItem(target);
+      });
+    });
+  },
+
+  filterByRecents() {
+    const recChannels = this.S.channels.filter(c => this.S.recents.includes(c.id));
+    if (recChannels.length === 0) {
+      alert('সম্প্রতি কোনো চ্যানেল দেখা হয়নি।');
+      return;
+    }
+    const grid = this.E['grid'];
+    if (!grid) return;
+    grid.innerHTML = recChannels.map(c => `
+      <div class="cc" data-id="${escHtml(c.id)}">
+        <div class="cc-logo-wrap">
+          <img class="cc-logo" src="${escHtml(c.logo || FALLBACK_LOGO_SVG)}" alt="${escHtml(c.name)}" />
+          <div class="cc-overlay-play"><i class="fas fa-play"></i></div>
+        </div>
+        <div class="cc-foot">
+          <div class="cc-name">${escHtml(c.name)}</div>
+          <div class="cc-meta"><span class="cc-cat">${escHtml(c.category)}</span></div>
+        </div>
+      </div>
+    `).join('');
+
+    grid.querySelectorAll('.cc').forEach(card => {
+      card.addEventListener('click', () => {
+        const target = this.S.channels.find(c => c.id === card.dataset.id);
+        if (target) this.playItem(target);
+      });
+    });
+  },
+
+  // ═══════════════════════════════════════════
+  // 11. TOP CAROUSEL & SEARCH
+  // ═══════════════════════════════════════════
+  renderUpcomingCarousel() {
+    const trackHome = this.E['upc-track-home'];
+    if (!trackHome) return;
+
+    const items = [...this.S.events].slice(0, 10);
+    if (items.length === 0) return;
+
+    trackHome.innerHTML = items.map(ev => {
+      const isLive = ev.isLive;
+      const thumb = ev.poster || ev.logo || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=400&fit=crop';
+      return `
+        <div class="upc-card ${isLive ? 'upc-live' : ''}" data-id="${escHtml(ev.id)}">
+          <div class="upc-thumb-wrap">
+            <img class="upc-thumb" src="${escHtml(thumb)}" alt="${escHtml(ev.title)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
+            ${isLive ? '<div class="upc-live-badge"><div class="dot"></div>LIVE</div>' : '<div class="upc-upcoming-badge">UPCOMING</div>'}
+          </div>
+          <div class="upc-info">
+            <div class="upc-title">${escHtml(ev.title)}</div>
+            <div class="upc-meta">${escHtml(ev.tournament || ev.category)}</div>
+            <div class="upc-time"><i class="far fa-clock"></i> ${escHtml(ev.time)}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    trackHome.querySelectorAll('.upc-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.id;
+        const item = this.S.events.find(x => x.id === id);
+        if (item) this.playItem(item);
+      });
+    });
   },
 
   handleGlobalSearch(query) {
@@ -2405,59 +1337,41 @@ const APP = {
 
     const q = query.trim().toLowerCase();
     if (!q) {
-      resBox.innerHTML = '<div class="empty"><i class="fas fa-search"></i><p>চ্যানেল, মুভি বা ম্যাচের নাম লিখুন...</p></div>';
+      resBox.innerHTML = '<div class="empty"><i class="fas fa-search"></i><p>ইভেন্ট বা চ্যানেলের নাম লিখুন...</p></div>';
       return;
     }
 
-    const matchedChannels = this.S.channels.filter(c => c.name.toLowerCase().includes(q));
-    const matchedMovies = this.S.movies.filter(m => m.title.toLowerCase().includes(q));
-    const matchedSports = this.S.sports.filter(s => s.title.toLowerCase().includes(q));
+    const matchedEvents = this.S.events.filter(e => e.title.toLowerCase().includes(q) || (e.category || '').toLowerCase().includes(q));
+    const matchedChannels = this.S.channels.filter(c => c.name.toLowerCase().includes(q) || (c.category || '').toLowerCase().includes(q));
 
-    const totalFound = matchedChannels.length + matchedMovies.length + matchedSports.length;
-
-    if (totalFound === 0) {
-      resBox.innerHTML = `<div class="empty"><i class="fas fa-search"></i><p>"${escHtml(query)}" নামে কিছুই পাওয়া যায়নি।</p></div>`;
+    if (matchedEvents.length === 0 && matchedChannels.length === 0) {
+      resBox.innerHTML = `<div class="empty"><i class="fas fa-search"></i><p>"${escHtml(query)}" পাওয়া যায়নি।</p></div>`;
       return;
     }
 
     let html = '';
+    if (matchedEvents.length > 0) {
+      html += `<div class="srch-sec-title">🏆 লাইভ ইভেন্ট (${matchedEvents.length})</div>`;
+      html += matchedEvents.slice(0, 8).map(ev => `
+        <div class="srch-item" data-type="event" data-id="${escHtml(ev.id)}">
+          <img class="srch-logo" src="${escHtml(ev.poster || ev.logo || FALLBACK_LOGO_SVG)}" alt="${escHtml(ev.title)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
+          <div class="srch-info">
+            <div class="srch-name">${escHtml(ev.title)}</div>
+            <div class="srch-cat">${escHtml(ev.category)} • ${escHtml(ev.time)}</div>
+          </div>
+          <button class="srch-play-btn"><i class="fas fa-play"></i></button>
+        </div>
+      `).join('');
+    }
 
     if (matchedChannels.length > 0) {
-      html += `<div class="srch-sec-title">📺 টিভি চ্যানেল (${matchedChannels.length})</div>`;
-      html += matchedChannels.slice(0, 10).map(c => `
+      html += `<div class="srch-sec-title">📺 লাইভ টিভি চ্যানেল (${matchedChannels.length})</div>`;
+      html += matchedChannels.slice(0, 12).map(c => `
         <div class="srch-item" data-type="channel" data-id="${escHtml(c.id)}">
           <img class="srch-logo" src="${escHtml(c.logo || FALLBACK_LOGO_SVG)}" alt="${escHtml(c.name)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
           <div class="srch-info">
             <div class="srch-name">${escHtml(c.name)}</div>
-            <div class="srch-cat">${escHtml(c.category)}</div>
-          </div>
-          <button class="srch-play-btn"><i class="fas fa-play"></i></button>
-        </div>
-      `).join('');
-    }
-
-    if (matchedMovies.length > 0) {
-      html += `<div class="srch-sec-title">🎬 মুভি ও সিরিজ (${matchedMovies.length})</div>`;
-      html += matchedMovies.slice(0, 10).map(m => `
-        <div class="srch-item" data-type="movie" data-id="${escHtml(m.id)}">
-          <img class="srch-logo" src="${escHtml(m.poster || FALLBACK_LOGO_SVG)}" alt="${escHtml(m.title)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-          <div class="srch-info">
-            <div class="srch-name">${escHtml(m.title)}</div>
-            <div class="srch-cat">${escHtml(m.category)} ${m.year ? `(${m.year})` : ''}</div>
-          </div>
-          <button class="srch-play-btn"><i class="fas fa-play"></i></button>
-        </div>
-      `).join('');
-    }
-
-    if (matchedSports.length > 0) {
-      html += `<div class="srch-sec-title">⚽ স্পোর্টস ও ম্যাচ (${matchedSports.length})</div>`;
-      html += matchedSports.slice(0, 10).map(s => `
-        <div class="srch-item" data-type="sport" data-id="${escHtml(s.id)}">
-          <img class="srch-logo" src="${escHtml(s.logo || FALLBACK_LOGO_SVG)}" alt="${escHtml(s.title)}" onerror="this.src='${FALLBACK_LOGO_SVG}'" />
-          <div class="srch-info">
-            <div class="srch-name">${escHtml(s.title)}</div>
-            <div class="srch-cat">${escHtml(s.tournament || s.category)}</div>
+            <div class="srch-cat">${escHtml(c.category)} (${c.source === 'fasttv' ? 'FAST TV' : 'NAFI TV24'})</div>
           </div>
           <button class="srch-play-btn"><i class="fas fa-play"></i></button>
         </div>
@@ -2471,24 +1385,58 @@ const APP = {
         const type = itemEl.dataset.type;
         const id = itemEl.dataset.id;
         this.closeSearch();
-
-        if (type === 'channel') {
-          const ch = this.S.channels.find(c => c.id === id);
+        if (type === 'event') {
+          const ev = this.S.events.find(x => x.id === id);
+          if (ev) this.playItem(ev);
+        } else if (type === 'channel') {
+          const ch = this.S.channels.find(x => x.id === id);
           if (ch) this.playItem(ch);
-        } else if (type === 'movie') {
-          const m = this.S.movies.find(x => x.id === id);
-          if (m) this.playItem(m);
-        } else if (type === 'sport') {
-          const s = this.S.sports.find(x => x.id === id);
-          if (s) this.playItem(s);
         }
       });
     });
+  },
+
+  // ── Modals & Overlays Helpers ──
+  openMenu() {
+    if (this.E['menu-ov']) this.E['menu-ov'].style.display = 'block';
+    if (this.E['menu']) this.E['menu'].classList.add('on');
+  },
+  closeMenu() {
+    if (this.E['menu-ov']) this.E['menu-ov'].style.display = 'none';
+    if (this.E['menu']) this.E['menu'].classList.remove('on');
+  },
+  openSearch() {
+    if (this.E['srch-ov']) {
+      this.E['srch-ov'].style.display = 'flex';
+      if (this.E['srch-in']) {
+        this.E['srch-in'].value = '';
+        this.E['srch-in'].focus();
+      }
+    }
+  },
+  closeSearch() {
+    if (this.E['srch-ov']) this.E['srch-ov'].style.display = 'none';
+  },
+  openSettings() {
+    if (this.E['set-ov']) this.E['set-ov'].style.display = 'block';
+    if (this.E['settings']) this.E['settings'].classList.add('on');
+  },
+  closeSettings() {
+    if (this.E['set-ov']) this.E['set-ov'].style.display = 'none';
+    if (this.E['settings']) this.E['settings'].classList.remove('on');
+  },
+  openContact() {
+    if (this.E['contact-ov']) this.E['contact-ov'].style.display = 'block';
+    if (this.E['contact-sheet']) this.E['contact-sheet'].classList.add('on');
+  },
+  closeContact() {
+    if (this.E['contact-ov']) this.E['contact-ov'].style.display = 'none';
+    if (this.E['contact-sheet']) this.E['contact-sheet'].classList.remove('on');
   }
 };
 
 // ═══════════════════════════════════════════
-// 11. BOOTSTRAP APPLICATION
+// 12. BOOTSTRAP APPLICATION
 // ═══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   APP.init();
