@@ -79,7 +79,7 @@ class MediaRepository(private val context: Context) {
     // Marquee Scrolling Breaking News Ticker Management
     companion object {
         const val DEFAULT_MARQUEE_TEXT = "বাংলাদেশ ব্যাংকের নতুন মুদ্রানীতি ঘোষণা। পুঁজিবাজারে ঊর্ধ্বগতি। NAFI TV24 এ ক্রিকেট, ফুটবল ও লাইভ টিভি চ্যানেল সম্পূর্ণ বিনামূল্যে উপভোগ করুন।"
-        const val DEFAULT_RTDB_URL = "https://nafitv24-live-default-rtdb.firebaseio.com/"
+        const val DEFAULT_RTDB_URL = ""
         const val DEFAULT_TAPMAD_JSON_URL = "https://gist.githubusercontent.com/albatr0ssss/3cff7a26be49b1d352c15f615067e7cd/raw/tapmad_bd.json"
         const val DEFAULT_PRIME_SPORTS_M3U_URL = "https://raw.githubusercontent.com/srhady/willow-event/refs/heads/main/primevideo_sports.m3u"
         const val DEFAULT_FAST_TV_M3U_URL = "https://raw.githubusercontent.com/ahan443/FAST-IPTV/refs/heads/main/z.m3u"
@@ -93,9 +93,9 @@ class MediaRepository(private val context: Context) {
         const val DEFAULT_LATEST_MOVIES_M3U_URL = "https://raw.githubusercontent.com/srhady/join_telegram_chennal-livesportsplay/refs/heads/main/latest_movies.m3u"
         const val DEFAULT_M3U_URL = DEFAULT_FAST_TV_M3U_URL
         const val DEFAULT_ADMIN_PIN = "40541273"
-        const val FIREBASE_PROJECT_ID = "nafitv24-live"
-        const val FIREBASE_API_KEY = "AIzaSyDEhKK6T9kpKHICq4VSAXWoIQwQtfDFAX8"
-        const val FIRESTORE_DATABASE_ID = "(default)"
+        const val FIREBASE_PROJECT_ID = ""
+        const val FIREBASE_API_KEY = ""
+        const val FIRESTORE_DATABASE_ID = ""
     }
 
     fun getMarqueeTickerText(): String {
@@ -2677,8 +2677,8 @@ class MediaRepository(private val context: Context) {
 
     fun getSavedFirebaseUrl(): String {
         val stored = prefs.getString("saved_firebase_url", null)
-        if (stored.isNullOrBlank() || stored.contains("elaborate-airfoil") || stored.contains("nafitv24-default-rtdb")) {
-            return DEFAULT_RTDB_URL
+        if (stored.isNullOrBlank() || stored.contains("elaborate-airfoil") || stored.contains("nafitv24-default-rtdb") || stored.contains("nafitv24-live") || stored.contains("firebaseio.com")) {
+            return ""
         }
         return stored
     }

@@ -1,7 +1,7 @@
 /**
  * ══════════════════════════════════════════════════════════════════════════════
  * NAFI TV 24 – Web Application Engine
- * Disconnected from Firebase. Powered by direct high-speed endpoints:
+ * Powered strictly by user-provided playlists & endpoints:
  * 1. Live Events: Tapmad BD JSON & Prime Video Sports M3U (DASH/ClearKey)
  * 2. Live TV: FAST TV (BDIX) M3U & NAFI TV24 Categorized Multi-Server JSON
  * 3. Download Our App: Showcase & direct APK download
@@ -126,7 +126,7 @@ const APP = {
   },
 
   // ═══════════════════════════════════════════
-  // 2. PARALLEL DATA FETCHING (NO FIREBASE)
+  // 2. PARALLEL PLAYLIST FETCHING ENGINE
   // ═══════════════════════════════════════════
   async fetchWithFallback(url) {
     if (!url || typeof url !== 'string') return null;
